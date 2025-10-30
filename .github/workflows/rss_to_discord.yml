@@ -36,14 +36,14 @@ jobs:
 
       - name: Run Arc Checker
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          # Per-novel thread IDs (add more as you add novels)
+          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
         run: python new_arc_checker.py
 
   extra_checker:
     runs-on: ubuntu-latest
-    needs: arc_checker            # run AFTER arc_checker, not parallel
+    needs: arc_checker
     if: >
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -70,9 +70,8 @@ jobs:
 
       - name: Run Extra Checker
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
         run: python new_extra_checker.py
 
       - name: Commit updated state.json
@@ -88,7 +87,7 @@ jobs:
 
   paid_completion:
     runs-on: ubuntu-latest
-    needs: extra_checker          # <── THIS IS THE IMPORTANT PART
+    needs: extra_checker
     if: >
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -115,9 +114,8 @@ jobs:
 
       - name: Run Paid Completion Checker
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
         run: python completed_novel_checker.py --feed paid
 
       - name: Commit updated state.json
@@ -159,9 +157,8 @@ jobs:
 
       - name: Run Free Completion Checker
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
         run: python completed_novel_checker.py --feed free
 
       - name: Commit updated state.json
@@ -177,7 +174,7 @@ jobs:
 
   new_launch_checker:
     runs-on: ubuntu-latest
-    needs: free_completion        # <── launch waits for free completion
+    needs: free_completion
     if: >
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -205,7 +202,7 @@ jobs:
       - name: Run New Launch Checker
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
         run: python new_novel_checker.py --feed free
 
       - name: Commit updated state.json
