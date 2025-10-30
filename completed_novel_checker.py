@@ -32,7 +32,7 @@ STATE_PATH     = "state.json"
 BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 CHANNEL_ID_ENV = "DISCORD_CHANNEL_ID"
 
-COMPLETE_ROLE  = "<@&1329502614110474270>"
+COMPLETE_ROLE  = "<@&1329502614110474270>"  # kept but not used in message body
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -60,7 +60,7 @@ def send_bot_message(bot_token: str, channel_id: str, content: str):
     }
     payload = {
         "content": content,
-        "allowed_mentions": {"parse": ["roles"]},
+        "allowed_mentions": {"parse": []},  # no mentions anymore
         "flags": 4  # suppress embeds for cleaner wall text
     }
     r = requests.post(url, headers=headers, json=payload)
@@ -97,7 +97,6 @@ def get_duration(start_date_str: str, end_date: datetime) -> str:
     months = delta.months
     days = delta.days
 
-    # Handle year and month logic
     if years > 0:
         if months > 0:
             if days > 0:
@@ -112,51 +111,36 @@ def get_duration(start_date_str: str, end_date: datetime) -> str:
             )
         else:
             if days > 0:
-                return (
-                    f"more than "
-                    f"{'a' if years == 1 else years} year{'s' if years > 1 else ''}"
-                )
+                return f"more than {'a' if years == 1 else years} year{'s' if years > 1 else ''}"
             return f"{'a' if years == 1 else years} year{'s' if years > 1 else ''}"
 
-    # Handle month logic (no full years)
     if months > 0:
         if days > 0:
-            return (
-                f"more than "
-                f"{'a' if months == 1 else months} month{'s' if months > 1 else ''}"
-            )
+            return f"more than {'a' if months == 1 else months} month{'s' if months > 1 else ''}"
         return f"{'a' if months == 1 else months} month{'s' if months > 1 else ''}"
 
-    # Handle durations under a month
     weeks = days // 7
     remaining_days = days % 7
-
     if weeks > 0:
         if remaining_days > 0:
             return f"more than {weeks} week{'s' if weeks != 1 else ''}"
         return f"{weeks} week{'s' if weeks != 1 else ''}"
-
     if remaining_days > 0:
         return "more than a week"
-
     return "less than a week"
 
 
 def build_paid_completion(novel, chap_field, chap_link, duration: str):
-    role        = novel.get("role_mention", "").strip()
     title       = novel.get("novel_title", "")
     link        = novel.get("novel_link", "")
     host        = novel.get("host", "")
-    discord_url = novel.get("discord_role_url", "")
     count       = novel.get("chapter_count", "the entire series")
-    comp_role   = COMPLETE_ROLE
     DIV         = "<:purple_divider1:1365652778957144165>"
     divider_line = DIV * 10
 
     chap_text = chap_field.replace("\u00A0", " ")
 
     return (
-        f"{role} | {comp_role} <a:HappyCloud:1365575487333859398>\n"
         "## ꧁ᐟᐟ ◌ೄ⟢  Completion Announcement  :blueberries: ˚. ᵎᵎ˖ˎˊ-\n"
         f"{divider_line}\n"
         f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
@@ -169,27 +153,21 @@ def build_paid_completion(novel, chap_field, chap_link, duration: str):
         f"support <:turtle_plead:1365223487274352670> You can now visit {host} "
         f"to binge all advance releases~*<a:Heart:1365575427724283944>"
         f"<a:Paws:1365676154865979453>\n"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
-        f"-# Check out other translated projects at {discord_url} and react "
-        f"to get the latest updates <a:LoveLetter:1365575475841339435>"
+        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
     )
 
 
 def build_free_completion(novel, chap_field, chap_link):
-    role        = novel.get("role_mention", "").strip()
     title       = novel.get("novel_title", "")
     link        = novel.get("novel_link", "")
     host        = novel.get("host", "")
-    discord_url = novel.get("discord_role_url", "")
     count       = novel.get("chapter_count", "the entire series")
-    comp_role   = COMPLETE_ROLE
     DIV         = "<:purple_divider1:1365652778957144165>"
     divider_line = DIV * 10
 
     chap_text = chap_field.replace("\u00A0", " ")
 
     return (
-        f"{role} | {comp_role} <a:HappyCloud:1365575487333859398>\n"
         "## 𐔌  Announcing: Complete Series Unlocked ,, :cherries: — 𝝑𝝔  ꒱\n"
         f"{divider_line}\n"
         f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
@@ -200,19 +178,14 @@ def build_free_completion(novel, chap_field, chap_link):
         f"<:green_turtle_heart:1365264636064305203>\n"
         f"Head over to {host} to dive straight in~*"
         f"<a:Heart:1365575427724283944><a:Paws:1365676154865979453>\n"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
-        f"-# Check out other translated projects at {discord_url} and react "
-        f"to get the latest updates <a:LoveLetter:1365575475841339435>"
+        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
     )
 
 
 def build_only_free_completion(novel, chap_field, chap_link, duration):
-    role        = novel.get("role_mention", "").strip()
-    comp_role   = COMPLETE_ROLE
     title       = novel.get("novel_title", "")
     link        = novel.get("novel_link", "")
     host        = novel.get("host", "")
-    discord_url = novel.get("discord_role_url", "")
     count       = novel.get("chapter_count", "the entire series")
     DIV         = "<:purple_divider1:1365652778957144165>"
     divider_line = DIV * 10
@@ -220,7 +193,6 @@ def build_only_free_completion(novel, chap_field, chap_link, duration):
     chap_text = chap_field.replace("\u00A0", " ")
 
     return (
-        f"{role} | {comp_role} <a:HappyCloud:1365575487333859398>\n"
         "## ⁺‧ ༻•┈๑☽₊˚ ⌞Completion Announcement⋆ཋྀ ˚₊‧⁺ :kiwi: ∗༉‧₊˚\n"
         f"{divider_line}\n"
         f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
@@ -233,9 +205,7 @@ def build_only_free_completion(novel, chap_field, chap_link, duration):
         f"support <:luv_turtle:365263712549736448> You can now visit {host} "
         f"to binge on all the releases~*<a:Heart:1365575427724283944>"
         f"<a:Paws:1365676154865979453>\n"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
-        f"-# Check out other translated projects at {discord_url} and react "
-        f"to get the latest updates <a:LoveLetter:1365575475841339435>"
+        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
     )
 
 
@@ -260,7 +230,7 @@ def load_novels():
 
             novels.append({
                 "novel_title":      title,
-                "role_mention":     details.get("discord_role_id", ""),
+                "role_mention":     details.get("discord_role_id", ""),  # not used in body
                 "host":             host,
                 "novel_link":       details.get("novel_url", ""),
                 "chapter_count":    details.get("chapter_count", ""),
@@ -268,7 +238,7 @@ def load_novels():
                 "start_date":       details.get("start_date", ""),
                 "free_feed":        free,
                 "paid_feed":        paid,
-                "discord_role_url": details.get("discord_role_url", ""),
+                "discord_role_url": details.get("discord_role_url", ""),  # not used in body
             })
     return novels
 
@@ -298,8 +268,6 @@ def main():
         if not url:
             continue
 
-        # map feed_type to the new state.json key
-        # (this controls the generic skip check before parsing)
         if feed_type == "paid":
             completion_key = "paid_completion"
         else:
@@ -309,7 +277,6 @@ def main():
             print(f"→ skipping {novel_id} ({completion_key}) — already notified")
             continue
 
-        # parse RSS
         resp = requests.get(url)
         feed = feedparser.parse(resp.text)
         print(
@@ -317,20 +284,16 @@ def main():
             f"(Content-Type: {resp.headers.get('Content-Type')})"
         )
 
-        # look for the last_chapter marker in feed entries
         for entry in feed.entries:
             chap_field = entry.get("chaptername") or entry.get("chapter", "")
             if last_chap not in chap_field:
                 continue
 
-            # --- ONLY-FREE CASE (series with no paid feed at all) ---
             if feed_type == "free" and not novel.get("paid_feed"):
-                # guard specifically for only_free_completion so we don't double announce
                 if state.get(novel_id, {}).get("only_free_completion"):
                     print(f"→ skipping {novel_id} (only_free_completion) — already notified")
                     break
 
-                # compute duration…
                 if entry.get("published_parsed"):
                     chap_date = datetime(*entry.published_parsed[:6])
                 elif entry.get("updated_parsed"):
@@ -352,20 +315,14 @@ def main():
                     }
                     save_state(state)
                 else:
-                    print(
-                        f"→ Not marking {novel_id} as ‘only_free_completion’ "
-                        f"because send failed"
-                    )
+                    print(f"→ Not marking {novel_id} as ‘only_free_completion’ because send failed")
                 break
 
-            # --- PAID COMPLETION CASE ---
             elif feed_type == "paid":
-                # extra guard for paid_completion
                 if state.get(novel_id, {}).get("paid_completion"):
                     print(f"→ skipping {novel_id} (paid_completion) — already notified")
                     break
 
-                # compute duration…
                 if entry.get("published_parsed"):
                     chap_date = datetime(*entry.published_parsed[:6])
                 elif entry.get("updated_parsed"):
@@ -387,15 +344,10 @@ def main():
                     }
                     save_state(state)
                 else:
-                    print(
-                        f"→ Not marking {novel_id} as ‘paid_completion’ "
-                        f"because send failed"
-                    )
+                    print(f"→ Not marking {novel_id} as ‘paid_completion’ because send failed")
                 break
 
-            # --- STANDARD FREE COMPLETION (series that also had a paid feed) ---
             elif feed_type == "free":
-                # extra guard for free_completion
                 if state.get(novel_id, {}).get("free_completion"):
                     print(f"→ skipping {novel_id} (free_completion) — already notified")
                     break
@@ -412,10 +364,7 @@ def main():
                     }
                     save_state(state)
                 else:
-                    print(
-                        f"→ Not marking {novel_id} as ‘free_completion’ "
-                        f"because send failed"
-                    )
+                    print(f"→ Not marking {novel_id} as ‘free_completion’ because send failed")
                 break
 
 
