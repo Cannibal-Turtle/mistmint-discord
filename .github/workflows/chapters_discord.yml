@@ -29,7 +29,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install discord.py feedparser python-dateutil
+          pip install --upgrade "git+https://github.com/Cannibal-Turtle/rss-feed.git@main"
 
       # FREE feed → Mistmint threads
       - name: Run Free Chapters Bot
