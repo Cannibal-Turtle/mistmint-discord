@@ -65,7 +65,16 @@ MISTMINT_GUILD_ID = "1379303379221614702"
 def load_state(path=STATE_PATH):
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            raw = f.read().strip()
+            if not raw:
+                # empty file → treat as empty state
+                return {}
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                # malformed JSON → ignore and start fresh in-memory
+                print(f"⚠️ {path} contained invalid JSON; using empty state.", file=sys.stderr)
+                return {}
     except FileNotFoundError:
         return {}
 
