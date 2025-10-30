@@ -169,6 +169,7 @@ async def send_new_paid_entries():
                 title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
                 url=link,
                 description=nameextend or discord.Embed.Empty,
+                timestamp=timestamp,
                 color=int("A87676", 16),  # dusty rose
             )
             embed.set_author(name=f"{translator}˙ᵕ˙")
