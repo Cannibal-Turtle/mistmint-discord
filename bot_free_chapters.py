@@ -39,9 +39,11 @@ def load_state():
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(st, f, indent=2, ensure_ascii=False)
         return st
+    # add this migration so it respects your older key
+    if FEED_KEY not in st and "free_last_guid" in st:
+        st[FEED_KEY] = st.get("free_last_guid")
     st.setdefault("threads", {})
     return st
-
 
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
