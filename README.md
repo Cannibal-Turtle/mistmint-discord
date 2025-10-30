@@ -171,10 +171,10 @@ When you add a Mistmint Haven novel, do **two** things:
      ```
 ---
 
-## Add a new Mistmint paid chapter
+## Add a new Mistmint paid chapter (rss-feed repo side)
 
-- Update `"pub_date_override"` from `HOSTING_SITE_DATA` in `novel_mappings.py` in [rss-feed](https://github.com/Cannibal-Turtle/rss-feed/blob/main/novel_mappings.py) repo
-- Update `"latest_available_chapter"` in `mistmint_state.json` from [rss-feed](https://github.com/Cannibal-Turtle/rss-feed/blob/main/novel_mappings.py)
+- Update `"pub_date_override"` from `HOSTING_SITE_DATA` in [`novel_mappings.py`](https://github.com/Cannibal-Turtle/rss-feed/blob/main/novel_mappings.py)
+- Update `"latest_available_chapter"` in [`mistmint_state.json`](https://github.com/Cannibal-Turtle/rss-feed/blob/main/mistmint_state.json)
 
 **Notes**
 - You do **not** edit the Python scripts per novel. Scripts auto-resolve the correct thread from `<SHORTCODE>_THREAD_ID`.
