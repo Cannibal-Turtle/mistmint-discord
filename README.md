@@ -90,16 +90,6 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
 
 ---
 
-## YAML notes (GitHub Actions)
-
-- You **do not** need to change YAML per novel. The scripts resolve the thread from the `<SHORTCODE>_THREAD_ID` secret.
-- Update YAML only if you:
-  - rename scripts,
-  - add/remove jobs,
-  - or want to drop any legacy `DISCORD_CHANNEL_ID` usage.
-
----
-
 ## Message style (already baked in)
 
 - **No global ping line** in Mistmint posts.
@@ -155,11 +145,35 @@ python new_novel_checker.py --feed free
 
 ---
 
-## When you add a new novel — TL;DR
+## Add a new Mistmint novel (per-novel thread mapping)
 
-- [ ] Add novel entry to `HOSTING_SITE_DATA["Mistmint Haven"]["novels"]`
-- [ ] Create/copy the novel’s **Thread ID**
-- [ ] Add secret `<SHORTCODE>_THREAD_ID = <thread id>`
-- [ ] Commit `rss-feed` changes
-- [ ] Ensure `state.json` is `{}` (valid JSON)
-- [ ] Run the workflow and watch logs
+When you add a Mistmint Haven novel, do **two** things:
+
+1) **Create the secret**
+   - Go to: **Settings → Secrets and variables → Actions → New repository secret**
+   - Name: `<SHORTCODE>_THREAD_ID`  
+     Example: `TDLBKGC_THREAD_ID`
+   - Value: the Discord **thread ID** (numbers only), e.g. `1433327716937240626`
+
+2) **Wire the secret into the workflow env**
+   - Edit `.github/workflows/rss-to-discord.yml`
+   - In the `env:` block of each step that runs a checker, add **one line per novel**:
+
+     ```yaml
+     env:
+       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+       # existing novels…
+       TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
+
+       # add new ones as you go:
+       BGM_THREAD_ID: ${{ secrets.BGM_THREAD_ID }}          # example
+       XYZ_THREAD_ID: ${{ secrets.XYZ_THREAD_ID }}          # example
+     ```
+
+**Notes**
+- You do **not** edit the Python scripts per novel. Scripts auto-resolve the correct thread from `<SHORTCODE>_THREAD_ID`.
+- `<SHORTCODE>` comes from `HOSTING_SITE_DATA` (`short_code`), or falls back to a sanitized UPPERCASE title (non-alnum → `_`).
+- If you later rename a short code, update:  
+  a) the secret name in **Actions secrets**, and  
+  b) the matching `env:` line in the workflow.
+
