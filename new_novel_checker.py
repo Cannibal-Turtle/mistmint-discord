@@ -42,6 +42,7 @@ import feedparser
 import requests
 from datetime import datetime, timezone
 import subprocess
+import time
 
 from novel_mappings import (
     HOSTING_SITE_DATA,
@@ -62,19 +63,6 @@ MISTMINT_GUILD_ID = "1379303379221614702"
 
 # ───────────────────────────────────────────────────────────────────────────────
 
-def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
-    h = {"Authorization": f"Bot {bot_token}"}
-    r = requests.get(
-        f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
-        headers=h, timeout=15
-    )
-    if r.status_code == 200:
-        return True
-    r = requests.put(
-        f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
-        headers=h, timeout=15
-    )
-    return r.status_code in (200, 204)
 
 def commit_state_update(path=STATE_PATH):
     """Commit/push state.json so the skip flag survives the next run."""
@@ -131,51 +119,63 @@ def parsed_time_to_aware(struct_t, fallback_now):
     except Exception:
         return fallback_now
 
-
-def nice_footer_time(chap_dt: datetime, now_dt: datetime) -> str:
-    chap_day = chap_dt.date()
-    now_day  = now_dt.date()
-    hhmm     = chap_dt.strftime("%H:%M")
-
-    if chap_day == now_day:
-        return f"Today at {hhmm}"
-
-    delta_days = (now_day - chap_day).days
-    if delta_days == 1:
-        return f"Yesterday at {hhmm}"
-
-    return chap_dt.strftime("%Y-%m-%d %H:%M")
-
+def _ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
+    try:
+        h = {"Authorization": f"Bot {bot_token}"}
+        r = requests.get(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me", headers=h, timeout=15)
+        if r.status_code == 200:
+            return True
+        j = requests.put(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me", headers=h, timeout=15)
+        return j.status_code in (200, 204)
+    except requests.RequestException:
+        return False
 
 def send_bot_message_embed(bot_token: str, channel_or_thread_id: str, content: str, embed: dict):
     url = f"https://discord.com/api/v10/channels/{channel_or_thread_id}/messages"
-    headers = {
-        "Authorization": f"Bot {bot_token}",
-        "Content-Type":  "application/json"
-    }
+    headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
     payload = {
-        "content": content,
+        "content": content or "",
         "embeds": [embed],
-        # keep roles for parity; content no longer has role mentions anyway
-        "allowed_mentions": {"parse": ["roles"]},
+        "allowed_mentions": {"parse": []},  # keep pings off for Mistmint
     }
+
     r = requests.post(url, headers=headers, json=payload, timeout=20)
-    r.raise_for_status()
 
+    # Missing Access / Missing Permissions → try joining once, then retry
+    if r.status_code == 403:
+        code = None
+        try:
+            code = r.json().get("code")
+        except Exception:
+            pass
+        if code in (50001, 50013) or "Missing Access" in (r.text or ""):
+            if _ensure_bot_in_thread(bot_token, channel_or_thread_id):
+                r = requests.post(url, headers=headers, json=payload, timeout=20)
 
-def safe_send_bot_embed(bot_token: str, channel_or_thread_id: str, content: str, embed: dict):
+    # Rate limit → use header if present
+    if r.status_code == 429:
+        try:
+            wait = float(r.headers.get("x-ratelimit-reset-after", r.json().get("retry_after", 1.0)))
+        except Exception:
+            wait = 1.0
+        time.sleep(min(wait, 5.0))
+        r = requests.post(url, headers=headers, json=payload, timeout=20)
+
+    if not r.ok:
+        raise requests.HTTPError(f"{r.status_code} {r.text}", response=r)
+
+def safe_send_bot_embed(bot_token: str, channel_or_thread_id: str, content: str, embed: dict) -> bool:
     try:
         send_bot_message_embed(bot_token, channel_or_thread_id, content, embed)
         return True
     except requests.HTTPError as e:
         status = e.response.status_code if e.response else "?"
-        body   = e.response.text       if e.response else ""
+        body   = e.response.text if e.response else ""
         print(f"⚠️ Bot send failed ({status}):\n{body}", file=sys.stderr)
         return False
     except requests.RequestException as e:
         print(f"⚠️ Bot send error: {e}", file=sys.stderr)
         return False
-
 
 def is_first_chapter_name(chapter_field: str) -> bool:
     if not chapter_field:
@@ -379,21 +379,13 @@ def main():
 
         follow_url = build_thread_url(thread_id)
 
-        # ⇩ join or verify membership before posting
-        if not ensure_bot_in_thread(bot_token, thread_id):
-            print(
-                f"❌ Could not join or view thread {thread_id} for {novel_title}. "
-                "Check View Channel, Read Message History, Send Messages in Threads, "
-                "and whether the thread is private or archived."
-            )
-            continue
-
         feed_url = novel.get("free_feed")
         if not feed_url:
             continue
 
         print(f"Fetching free feed for {novel_title} from {feed_url}")
         resp = requests.get(feed_url, timeout=20)
+        resp.raise_for_status()
         feed = feedparser.parse(resp.text)
         print(
             f"Parsed {len(feed.entries)} entries "
