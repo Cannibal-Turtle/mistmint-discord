@@ -12,7 +12,7 @@ Usage:
 
 Env secrets (GitHub Actions → Repository secrets):
   - DISCORD_BOT_TOKEN
-  - For each novel thread, set:  <SHORTCODE>_THREAD_ID  (e.g. TDLBKGC_THREAD_ID=1433327716937240626)
+  - For each novel thread, set:  <SHORTCODE>_THREAD_ID  (e.g. TDLBKGC_THREAD_ID=1433788343954575562)
 
 Notes:
   - Only novels with host == "Mistmint Haven" are considered.
