@@ -27,6 +27,7 @@ import re
 import sys
 import requests
 import feedparser
+import time
 
 # try to import your mapping package from rss-feed repo
 try:
@@ -45,28 +46,83 @@ BOT_TOKEN_ENV   = "DISCORD_BOT_TOKEN"
 
 
 # ─── DISCORD SEND (per-thread) ─────────────────────────────────────────────────
+
+def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
+    """Ensure the bot is a member of the thread (handles 50001/403 cases)."""
+    try:
+        h = {"Authorization": f"Bot {bot_token}"}
+        # already a member?
+        r = requests.get(
+            f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+            headers=h, timeout=15
+        )
+        if r.status_code == 200:
+            return True
+        # try join
+        j = requests.put(
+            f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+            headers=h, timeout=15
+        )
+        return j.status_code in (200, 204)
+    except requests.RequestException:
+        return False
+
+
 def send_bot_message(bot_token: str, thread_id: str, content: str):
+    """POST to thread; auto-join on Missing Access and retry; simple 429 backoff."""
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
     headers = {
         "Authorization": f"Bot {bot_token}",
         "Content-Type":  "application/json"
     }
     payload = {
-        "content": content,
+        "content": content or "",
         "allowed_mentions": {"parse": []},   # no pings for Mistmint
         "flags": 4                            # suppress embeds for clean text
     }
+
+    # 1) first attempt
     r = requests.post(url, headers=headers, json=payload, timeout=20)
+
+    # 2) handle Missing Access / Missing Permissions by joining then retrying once
+    if r.status_code == 403:
+        code = None
+        try:
+            code = r.json().get("code")
+        except Exception:
+            pass
+        if code in (50001, 50013) or "Missing Access" in (r.text or ""):
+            if ensure_bot_in_thread(bot_token, thread_id):
+                r = requests.post(url, headers=headers, json=payload, timeout=20)
+            else:
+                print(f"⚠️ Could not join thread {thread_id}; skipping retry")
+
+    # 3) simple rate-limit backoff
+    if r.status_code == 429:
+        try:
+            wait = float(r.json().get("retry_after", 1.0))
+        except Exception:
+            wait = 1.0
+        time.sleep(min(wait, 5.0))
+        r = requests.post(url, headers=headers, json=payload, timeout=20)
+
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
     r.raise_for_status()
+    return r
 
-def safe_send_bot(bot_token: str, thread_id: str, content: str):
+
+def safe_send_bot(bot_token: str, thread_id: str, content: str) -> bool:
     try:
         send_bot_message(bot_token, thread_id, content)
         print(f"✅ Posted to thread {thread_id}")
         return True
-    except Exception as e:
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response else "?"
+        body   = e.response.text if e.response else ""
+        print(f"⚠️ Failed to send to {thread_id} ({status}): {body}", file=sys.stderr)
+        return False
+    except requests.RequestException as e:
         print(f"⚠️ Failed to send to {thread_id}: {e}", file=sys.stderr)
         return False
 
