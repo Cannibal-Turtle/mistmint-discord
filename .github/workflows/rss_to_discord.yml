@@ -196,7 +196,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install feedparser requests
+          pip install feedparser requests python-dateutil
           pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
 
       - name: "Debug: can the bot see the thread?"
