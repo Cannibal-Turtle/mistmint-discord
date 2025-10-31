@@ -3,7 +3,6 @@ import os
 import re
 import json
 import asyncio
-import requests
 from datetime import datetime, timezone
 import feedparser
 from dateutil import parser as dateparser
@@ -46,26 +45,6 @@ def find_short_code_for_entry(entry):
                 return sc.upper()
 
     return ''  # give up
-
-def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
-    h = {"Authorization": f"Bot {bot_token}"}
-    r = requests.get(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
-                     headers=h, timeout=15)
-    if r.status_code == 200:
-        return True
-    j = requests.put(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
-                     headers=h, timeout=15)
-    return j.status_code in (200, 204)
-
-def send_discord_message(bot_token: str, channel_or_thread_id: str, content: str, embed: dict | None = None):
-    url = f"https://discord.com/api/v10/channels/{channel_or_thread_id}/messages"
-    payload = {"content": content, "allowed_mentions": {"parse": ["roles"]}}
-    if embed:
-        payload["embeds"] = [embed]
-    r = requests.post(url,
-                      headers={"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"},
-                      json=payload, timeout=20)
-    r.raise_for_status()
     
 def load_state():
     try:
