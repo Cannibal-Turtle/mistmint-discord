@@ -187,6 +187,7 @@ def resolve_thread_id(novel_title: str, details: dict) -> str | None:
 
 def process_arc(novel, thread_id: str):
     print(f"\n=== Processing novel: {novel['novel_title']} → thread {thread_id} ===")
+    history_changed = False
 
     # 0. Fetch feeds
     free_feed = feedparser.parse(novel["free_feed"])
@@ -264,7 +265,8 @@ def process_arc(novel, thread_id: str):
                 history["locked"].remove(full)
                 if full not in history["unlocked"]:
                     history["unlocked"].append(full)
-                    print(f"🔓 Unlocked arc: {full}")
+                history_changed = True
+                print(f"🔓 Unlocked arc: {full}")
                 break
         if not matched_locked:
             seen_bases = [re.sub(r"^【Arc\s*\d+】", "", t) for t in (history["unlocked"] + history["locked"])]
@@ -273,6 +275,7 @@ def process_arc(novel, thread_id: str):
                 full = f"【Arc {n}】{base}"
                 history["unlocked"].append(full)
                 free_created = True
+                history_changed = True
                 print(f"🌿 Brand-new free arc: {full}")
 
     # paid side
@@ -283,6 +286,7 @@ def process_arc(novel, thread_id: str):
             full = f"【Arc {n}】{base}"
             history["locked"].append(full)
             paid_created = True
+            history_changed = True
             print(f"🔐 New locked arc: {full}")
 
     # dedupe
@@ -309,11 +313,17 @@ def process_arc(novel, thread_id: str):
 
     # if no locked arcs, nothing to hype
     if not history["locked"]:
+        if history_changed:
+            save_history(history, history_file)
+            commit_history_update(history_file)
         print("ℹ️ No locked arcs. Done.")
         return
 
     new_full = history["locked"][-1]
     if new_full == history.get("last_announced", ""):
+        if history_changed:
+            save_history(history, history_file)
+            commit_history_update(history_file)
         print(f"✅ Already announced: {new_full}")
         return
 
