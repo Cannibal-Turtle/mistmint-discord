@@ -22,7 +22,7 @@ Behavior:
 Env vars required:
   DISCORD_BOT_TOKEN  -> your bot token (not webhook)
   For each Mistmint novel thread, set:  <SHORTCODE>_THREAD_ID
-    e.g.  TDLBKGC_THREAD_ID=1433327716937240626
+    e.g.  TDLBKGC_THREAD_ID=1433788343954575562
 
 Notes:
 - SHORTCODE is taken from HOSTING_SITE_DATA.novels[...]['short_code'] if present.
