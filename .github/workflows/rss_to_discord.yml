@@ -199,6 +199,20 @@ jobs:
           pip install feedparser requests
           pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
 
+      - name: Probe: can the bot post to the thread?
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
+        run: |
+          set -e
+          curl -sS -D /tmp/h.txt -o /tmp/b.txt -X POST \
+            -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"content":"probe: hello from CI"}' \
+            "https://discord.com/api/v10/channels/${TDLBKGC_THREAD_ID}/messages" || true
+          echo "---- HTTP headers ----"; cat /tmp/h.txt
+          echo "---- Body ----"; cat /tmp/b.txt
+
       - name: Run New Launch Checker
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
@@ -216,16 +230,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Probe: can the bot post to the thread?
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
-        run: |
-          set -e
-          curl -sS -D /tmp/h.txt -o /tmp/b.txt -X POST \
-            -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"content":"probe: hello from CI"}' \
-            "https://discord.com/api/v10/channels/${TDLBKGC_THREAD_ID}/messages" || true
-          echo "---- HTTP headers ----"; cat /tmp/h.txt
-          echo "---- Body ----"; cat /tmp/b.txt
