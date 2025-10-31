@@ -92,6 +92,19 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
     r.raise_for_status()
 
 
+def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
+    try:
+        h = {"Authorization": f"Bot {bot_token}"}
+        r = requests.get(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+                         headers=h, timeout=15)
+        if r.status_code == 200:
+            return True
+        j = requests.put(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+                         headers=h, timeout=15)
+        return j.status_code in (200, 204)
+    except requests.RequestException:
+        return False
+
 def safe_send_bot(bot_token: str, channel_or_thread_id: str, content: str) -> bool:
     try:
         send_bot_message(bot_token, channel_or_thread_id, content)
@@ -358,7 +371,7 @@ def main():
                 msg = build_only_free_completion(novel, chap_field, entry.link, duration)
                 print(f"→ Built message of {len(msg)} characters")
 
-                if safe_send_bot(bot_token, thread_id, msg):
+                if ensure_bot_in_thread(bot_token, thread_id) and safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent only-free completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["only_free_completion"] = {
                         "chapter": chap_field,
@@ -379,7 +392,7 @@ def main():
                 msg = build_paid_completion(novel, chap_field, entry.link, duration)
                 print(f"→ Built message of {len(msg)} characters")
 
-                if safe_send_bot(bot_token, thread_id, msg):
+                if ensure_bot_in_thread(bot_token, thread_id) and safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent paid-completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["paid_completion"] = {
                         "chapter": chap_field,
@@ -399,7 +412,7 @@ def main():
                 msg = build_free_completion(novel, chap_field, entry.link)
                 print(f"→ Built message of {len(msg)} characters")
 
-                if safe_send_bot(bot_token, thread_id, msg):
+                if ensure_bot_in_thread(bot_token, thread_id) and safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent free-completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["free_completion"] = {
                         "chapter": chap_field,
