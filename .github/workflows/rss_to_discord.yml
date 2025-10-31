@@ -199,7 +199,7 @@ jobs:
           pip install feedparser requests
           pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
 
-      - name: Probe: can the bot post to the thread?
+      - name: "Probe: can the bot post to the thread?"
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
