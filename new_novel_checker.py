@@ -62,6 +62,19 @@ MISTMINT_GUILD_ID = "1379303379221614702"
 
 # ───────────────────────────────────────────────────────────────────────────────
 
+def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
+    h = {"Authorization": f"Bot {bot_token}"}
+    r = requests.get(
+        f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+        headers=h, timeout=15
+    )
+    if r.status_code == 200:
+        return True
+    r = requests.put(
+        f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+        headers=h, timeout=15
+    )
+    return r.status_code in (200, 204)
 
 def commit_state_update(path=STATE_PATH):
     """Commit/push state.json so the skip flag survives the next run."""
@@ -365,6 +378,15 @@ def main():
             continue
 
         follow_url = build_thread_url(thread_id)
+
+        # ⇩ join or verify membership before posting
+        if not ensure_bot_in_thread(bot_token, thread_id):
+            print(
+                f"❌ Could not join or view thread {thread_id} for {novel_title}. "
+                "Check View Channel, Read Message History, Send Messages in Threads, "
+                "and whether the thread is private or archived."
+            )
+            continue
 
         feed_url = novel.get("free_feed")
         if not feed_url:
