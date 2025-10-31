@@ -1,8 +1,8 @@
 name: Check RSS & Send Comments
 
 on:
-  #schedule:
-    #- cron: '0 * * * *'
+  schedule:
+    - cron: '0 * * * *'
   repository_dispatch:
     types: [trigger-discord-comments]
   workflow_dispatch:
