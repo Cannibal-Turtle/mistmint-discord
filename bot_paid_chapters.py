@@ -3,6 +3,8 @@ import os
 import re
 import json
 import asyncio
+import requests
+from datetime import datetime, timezone
 import feedparser
 from dateutil import parser as dateparser
 
@@ -21,6 +23,50 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/pa
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 # ───────────────────────────────────────────────────────────────────────────────
 
+def find_short_code_for_entry(entry):
+    # A) try explicit field if your script/feed ever adds it
+    sc = (entry.get('short_code') or entry.get('shortcode') or '').strip()
+    if sc:
+        return sc.upper()
+
+    # B) parse from guid like "tdlbkgc-1"
+    gid = (entry.get('guid') or entry.get('id') or '')
+    m = re.match(r'([a-z0-9_]+)-', str(gid), re.I)
+    if m:
+        return m.group(1).upper()
+
+    # C) map by (host, title) from HOSTING_SITE_DATA
+    host  = (entry.get('host') or '').strip()
+    title = (entry.get('title') or '').strip()
+    host_block = HOSTING_SITE_DATA.get(host, {})
+    for novel_title, details in host_block.get('novels', {}).items():
+        if novel_title == title:
+            sc = (details.get('short_code') or '').strip()
+            if sc:
+                return sc.upper()
+
+    return ''  # give up
+
+def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
+    h = {"Authorization": f"Bot {bot_token}"}
+    r = requests.get(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+                     headers=h, timeout=15)
+    if r.status_code == 200:
+        return True
+    j = requests.put(f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+                     headers=h, timeout=15)
+    return j.status_code in (200, 204)
+
+def send_discord_message(bot_token: str, channel_or_thread_id: str, content: str, embed: dict | None = None):
+    url = f"https://discord.com/api/v10/channels/{channel_or_thread_id}/messages"
+    payload = {"content": content, "allowed_mentions": {"parse": ["roles"]}}
+    if embed:
+        payload["embeds"] = [embed]
+    r = requests.post(url,
+                      headers={"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"},
+                      json=payload, timeout=20)
+    r.raise_for_status()
+    
 def load_state():
     try:
         return json.load(open(STATE_FILE, encoding="utf-8"))
@@ -128,7 +174,7 @@ async def send_new_paid_entries():
         new_last = _last
         for entry in queue:
             guid         = _guid(entry)
-            short_code   = _short_code(entry)
+            short_code   = find_short_code_for_entry(entry)
             if not short_code:
                 print(f"⚠️ Skip: no short_code in entry guid={guid}")
                 continue
@@ -146,6 +192,15 @@ async def send_new_paid_entries():
                     print(f"❌ Skip: cannot resolve thread {thread_id} for guid={guid} ({e})")
                     continue
 
+            # Ensure the bot is a member of the thread before sending
+            try:
+                if isinstance(dest, discord.Thread):
+                    await dest.join()
+            except discord.Forbidden:
+                pass
+            except Exception as e:
+                print(f"⚠️ Could not join thread {thread_id}: {e}")
+
             # ── Build content (no role/global mentions)
             title_text  = _norm(entry.get("title"))
             content = (
@@ -154,7 +209,7 @@ async def send_new_paid_entries():
             )
 
             # ── Embed
-            novel_title = _norm(entry.get("novel_title"))
+            novel_title = _norm(entry.get("title"))
             chaptername = _norm(entry.get("chaptername"))
             nameextend  = _norm(entry.get("nameextend"))
             link        = _norm(entry.get("link"))
@@ -163,7 +218,9 @@ async def send_new_paid_entries():
             thumb_url   = (entry.get("featuredImage") or entry.get("featuredimage") or {}).get("url")
             host_logo   = (entry.get("hostLogo") or entry.get("hostlogo") or {}).get("url")
             pub_raw     = getattr(entry, "published", None)
-            timestamp   = dateparser.parse(pub_raw) if pub_raw else None
+            timestamp = dateparser.parse(pub_raw) if pub_raw else None
+            if timestamp and timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
 
             embed = Embed(
                 title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
