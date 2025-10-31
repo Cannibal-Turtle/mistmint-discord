@@ -42,8 +42,29 @@ NSFW_ROLE_ID  = "<@&1343352825811439616>"  # detected but NOT mentioned
 
 # === DISCORD SEND ===
 
+def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
+    """Ensure the bot is a member of the thread (handles 50001/403 cases)."""
+    try:
+        h = {"Authorization": f"Bot {bot_token}"}
+        # already a member?
+        r = requests.get(
+            f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+            headers=h, timeout=15
+        )
+        if r.status_code == 200:
+            return True
+        # try join
+        j = requests.put(
+            f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
+            headers=h, timeout=15
+        )
+        return j.status_code in (200, 204)
+    except requests.RequestException:
+        return False
+
+
 def post_message(thread_id: str, content: str, embeds: list | None = None, suppress_embeds: bool = False):
-    """Minimal Discord POST wrapper; threads use the same channel endpoint."""
+    """HTTP sender that auto-joins the thread on Missing Access and retries once."""
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
     headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
     payload = {
@@ -54,7 +75,20 @@ def post_message(thread_id: str, content: str, embeds: list | None = None, suppr
         payload["embeds"] = embeds
     if suppress_embeds:
         payload["flags"] = 4
+
+    # first try
     r = requests.post(url, headers=headers, json=payload, timeout=20)
+    if r.status_code == 403:
+        # typical Discord errors: 50001 Missing Access, 50013 Missing Permissions
+        code = None
+        try:
+            code = r.json().get("code")
+        except Exception:
+            pass
+        if code in (50001, 50013) or "Missing Access" in r.text:
+            if ensure_bot_in_thread(BOT_TOKEN, thread_id):
+                r = requests.post(url, headers=headers, json=payload, timeout=20)
+
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
     r.raise_for_status()
