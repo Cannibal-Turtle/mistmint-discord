@@ -41,6 +41,7 @@ import html
 import feedparser
 import requests
 from datetime import datetime, timezone
+import subprocess
 
 from novel_mappings import (
     HOSTING_SITE_DATA,
@@ -61,6 +62,22 @@ MISTMINT_GUILD_ID = "1379303379221614702"
 
 # ───────────────────────────────────────────────────────────────────────────────
 
+
+def commit_state_update(path=STATE_PATH):
+    """Commit/push state.json so the skip flag survives the next run."""
+    try:
+        subprocess.run(["git","config","--global","user.name","GitHub Actions"], check=True)
+        subprocess.run(["git","config","--global","user.email","actions@github.com"], check=True)
+        subprocess.run(["git","add", path], check=True)
+        # commit only if there are staged changes
+        staged = subprocess.run(["git","diff","--staged","--quiet"])
+        if staged.returncode != 0:
+            subprocess.run(["git","commit","-m", f"Auto-update: {os.path.basename(path)}"], check=True)
+            subprocess.run(["git","push","origin","main"], check=True)
+        else:
+            print(f"⚠️ No changes detected in {path}, skipping commit.")
+    except Exception as e:
+        print(f"❌ Git commit/push for {path} failed: {e}")
 
 def load_state(path=STATE_PATH):
     try:
@@ -328,6 +345,8 @@ def main():
     now_local = datetime.now(timezone.utc).astimezone()
 
     for novel in novels:
+        if novel["host"] != "Mistmint Haven":
+            continue
         novel_title = novel["novel_title"]
         host_name   = novel["host"]
 
@@ -337,10 +356,12 @@ def main():
             continue
 
         # route to per-novel thread via secret <SHORTCODE>_THREAD_ID
-        thread_id = resolve_thread_id(novel_title, novel)
+        # Show the precise expected env var (short_code aware)
+        short_code = (novel.get("short_code") or sanitize_shortcode_from_title(novel_title)).upper()
+        env_key    = thread_env_key_for(short_code)
+        thread_id  = os.getenv(env_key, "").strip()
         if not thread_id:
-            print(f"❌ No thread secret set for {novel_title}. "
-                  f"Define {sanitize_shortcode_from_title(novel_title)}_THREAD_ID.")
+            print(f"❌ No thread secret set for {novel_title}. Define {env_key}.")
             continue
 
         follow_url = build_thread_url(thread_id)
@@ -423,6 +444,7 @@ def main():
                     "sent_at": datetime.now().isoformat()
                 }
                 save_state(state)
+                commit_state_update(STATE_PATH)
             else:
                 print("→ Send failed; not updating state.json")
 
