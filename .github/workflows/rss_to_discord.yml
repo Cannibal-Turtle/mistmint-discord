@@ -197,41 +197,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install feedparser requests python-dateutil
-          pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
-
-      - name: "Debug: can the bot see the thread?"
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
-        run: |
-          set -e
-          echo "1) GET channel (thread) object"
-          curl -sS -D /tmp/h1.txt -o /tmp/b1.txt \
-            -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
-            "https://discord.com/api/v10/channels/${TDLBKGC_THREAD_ID}" || true
-          echo "---- headers ----"; cat /tmp/h1.txt
-          echo "---- body ----";    cat /tmp/b1.txt
-      
-      - name: Join thread (bots must be members)
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
-        run: |
-          # Expect 204 No Content if successful
-          curl -sS -X PUT -i \
-            -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
-            "https://discord.com/api/v10/channels/${TDLBKGC_THREAD_ID}/thread-members/@me" || true
-      
-      - name: Probe send after join
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
-        run: |
-          curl -sS -X POST -i \
-            -H "Authorization: Bot $DISCORD_BOT_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"content":"probe: hello from CI"}' \
-            "https://discord.com/api/v10/channels/${TDLBKGC_THREAD_ID}/messages" || true
+          pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main    
 
       - name: Run New Launch Checker
         env:
