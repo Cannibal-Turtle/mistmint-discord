@@ -119,6 +119,19 @@ def parsed_time_to_aware(struct_t, fallback_now):
     except Exception:
         return fallback_now
 
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+    url = f"https://discord.com/api/v10/channels/{thread_id}"
+    headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
+    payload = {"archived": False}
+    if unlock:
+        payload["locked"] = False
+    if auto_archive_minutes:
+        payload["auto_archive_duration"] = auto_archive_minutes  # 60, 1440, 4320, 10080
+    r = requests.patch(url, headers=headers, json=payload, timeout=15)
+    if not r.ok:
+        print(f"⚠️ Unarchive failed {r.status_code}: {r.text}")
+    return r.ok
+  
 def _ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
     try:
         h = {"Authorization": f"Bot {bot_token}"}
@@ -141,24 +154,49 @@ def send_bot_message_embed(bot_token: str, channel_or_thread_id: str, content: s
 
     r = requests.post(url, headers=headers, json=payload, timeout=20)
 
-    # Missing Access / Missing Permissions → try joining once, then retry
-    if r.status_code == 403:
-        code = None
+    # Handle archived/missing access, then retry once
+    if r.status_code in (400, 403):
         try:
-            code = r.json().get("code")
+            body = r.json()
         except Exception:
-            pass
-        if code in (50001, 50013) or "Missing Access" in (r.text or ""):
-            if _ensure_bot_in_thread(bot_token, channel_or_thread_id):
-                r = requests.post(url, headers=headers, json=payload, timeout=20)
+            body = {"message": r.text}
+        msg  = (body.get("message") or "").lower()
+        code = body.get("code")
 
-    # Rate limit → use header if present
+        archived_hint  = ("archiv" in msg)  # e.g. "Cannot send messages in an archived thread"
+        missing_access = ("missing access" in msg) or (code in (50001, 50013))
+
+        did_fix = False
+        if archived_hint:
+            did_fix = unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+        if not did_fix and missing_access:
+            did_fix = _ensure_bot_in_thread(bot_token, channel_or_thread_id)
+
+        if did_fix:
+            time.sleep(0.8)
+            r = requests.post(url, headers=headers, json=payload, timeout=20)
+
+    # Rate limit → use header if present, then retry once
     if r.status_code == 429:
-        try:
-            wait = float(r.headers.get("x-ratelimit-reset-after", r.json().get("retry_after", 1.0)))
-        except Exception:
-            wait = 1.0
-        time.sleep(min(wait, 5.0))
+        wait = None
+
+        # Try header first (Discord sends seconds as a string)
+        reset_after = r.headers.get("X-RateLimit-Reset-After")
+        if reset_after:
+            try:
+                wait = float(reset_after)
+            except (TypeError, ValueError):
+                wait = None
+
+        # Fallback to JSON body retry_after
+        if wait is None:
+            try:
+                j = r.json()
+                wait = float(j.get("retry_after", 1.0))
+            except Exception:
+                wait = 1.0
+
+        time.sleep(min(max(wait, 0.0), 5.0))
         r = requests.post(url, headers=headers, json=payload, timeout=20)
 
     if not r.ok:
@@ -443,6 +481,10 @@ def main():
             )
 
             print(f"→ Built launch message for {novel_title} ({len(content_msg)} chars + 1 embed)")
+
+            # Ensure bot can post (join + unarchive just-in-time)
+            _ensure_bot_in_thread(bot_token, thread_id)
+            unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
 
             ok = safe_send_bot_embed(
                 bot_token=bot_token,
