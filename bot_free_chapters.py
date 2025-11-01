@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from discord.errors import Forbidden, HTTPException
 import os, re, json, asyncio
 import feedparser
 from datetime import timezone
@@ -63,6 +64,73 @@ def _thread_id_for(short_code):
     except ValueError:
         return None
 
+AUTO_ARCHIVE_ALLOWED = {60, 1440, 4320, 10080}
+
+async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+    """
+    Make sure the thread is unarchived (and optionally unlocked) before sending.
+    Requires the bot to have 'Manage Threads'. Falls back gracefully if the
+    guild doesn't allow 7-day auto archive.
+    """
+    if not isinstance(thread, discord.Thread):
+        return True
+
+    # Pick a valid auto-archive duration the guild supports (best-effort)
+    duration = min(AUTO_ARCHIVE_ALLOWED, key=lambda v: abs(v - auto_archive_minutes))
+
+    try:
+        # First try: unarchive directly
+        await thread.edit(
+            archived=False,
+            locked=(not unlock),
+            auto_archive_duration=duration
+        )
+        return True
+    except Forbidden:
+        # If we can’t edit (missing perms or not a member), try joining then edit again
+        try:
+            await thread.join()
+        except Exception:
+            pass
+        try:
+            await thread.edit(
+                archived=False,
+                locked=(not unlock),
+                auto_archive_duration=duration
+            )
+            return True
+        except Exception as e:
+            print(f"⚠️ Could not unarchive thread {thread.id}: {e}")
+            return False
+    except HTTPException as e:
+        # Some servers don’t allow 10080; retry without changing duration
+        if e.status == 400:
+            try:
+                await thread.edit(archived=False, locked=(not unlock))
+                return True
+            except Exception as e2:
+                print(f"⚠️ Unarchive retry (no duration) failed for {thread.id}: {e2}")
+                return False
+        print(f"⚠️ HTTPException unarchiving {thread.id}: {e}")
+        return False
+    except Exception as e:
+        print(f"⚠️ Unexpected error unarchiving {thread.id}: {e}")
+        return False
+
+async def ensure_thread_ready(thread_or_channel) -> bool:
+    """
+    If it's a Thread: join it (idempotent) and unarchive it.
+    Returns True if it should be safe to send.
+    """
+    if isinstance(thread_or_channel, discord.Thread):
+        try:
+            # Join is cheap & idempotent; ignore errors
+            await thread_or_channel.join()
+        except Exception:
+            pass
+        return await ensure_unarchived(thread_or_channel, unlock=True, auto_archive_minutes=10080)
+    return True
+
 async def send_new_entries():
     state = load_state()
     last  = state.get(FEED_KEY)
@@ -101,15 +169,12 @@ async def send_new_entries():
                 continue
 
             dest = bot.get_channel(thread_id) or await bot.fetch_channel(thread_id)
-
-            # Ensure membership before sending (avoids 50001)
-            try:
-                if isinstance(dest, discord.Thread):
-                    await dest.join()
-            except discord.Forbidden:
-                pass  # lacking permission or already a member
-            except Exception as e:
-                print(f"⚠️ Could not join thread {thread_id}: {e}")
+            
+            # Make sure we can actually post (join + unarchive + set auto-archive if allowed)
+            ok = await ensure_thread_ready(dest)
+            if not ok:
+                print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
+                continue
 
             # Content
             title = _norm(entry.get("title"))
