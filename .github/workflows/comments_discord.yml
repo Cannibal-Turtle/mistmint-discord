@@ -1,10 +1,10 @@
 name: Check RSS & Send Comments
 
 on:
-  schedule:
-    - cron: '0 * * * *'
-  repository_dispatch:
-    types: [trigger-discord-comments]
+  #schedule:
+    #- cron: '0 * * * *'
+  #repository_dispatch:
+    #types: [trigger-discord-comments]
   workflow_dispatch:
 
 concurrency:
@@ -33,7 +33,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install deps
-        run: pip install feedparser python-dateutil aiohttp
+        run: pip install requests feedparser python-dateutil aiohttp
 
       - name: Run Comments Bot
         timeout-minutes: 5
