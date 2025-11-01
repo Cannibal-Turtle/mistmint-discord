@@ -46,6 +46,9 @@ BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
 HOST_NAME_TARGET = "Mistmint Haven"  # Only post for this host
 COMPLETE_ROLE    = "<@&1329502614110474270>"  # kept for future if you ever add it back (not used in messages)
+
+# Only attempt PATCH /channels/{id} when the bot has Manage Threads
+USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -110,9 +113,10 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
     def _send():
         return requests.post(url, headers=headers, json=payload, timeout=20)
 
-    # Preflight: be in the thread and make sure it’s unarchived
+    # Preflight: join thread is always safe; unarchive only when allowed
     ensure_bot_in_thread(bot_token, channel_or_thread_id)
-    unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+    if USE_UNARCHIVE:
+        unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
 
     r = _send()
 
@@ -126,8 +130,10 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
         code = body.get("code")
 
         recovered = False
-        if "archiv" in msg:
+        if "archiv" in msg and USE_UNARCHIVE:
             recovered = unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+        
+        # Always try to join if we still could not recover
         if not recovered and (code in (50001, 50013) or "missing access" in msg):
             recovered = ensure_bot_in_thread(bot_token, channel_or_thread_id)
 
@@ -182,8 +188,9 @@ def safe_send_bot(bot_token: str, channel_or_thread_id: str, content: str) -> bo
     try:
         # one more gentle preflight (cheap idempotent calls)
         ensure_bot_in_thread(bot_token, channel_or_thread_id)
-        unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
-      
+        if USE_UNARCHIVE:
+            unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+        
         send_bot_message(bot_token, channel_or_thread_id, content)
         return True
     except requests.HTTPError as e:
