@@ -66,6 +66,9 @@ def _thread_id_for(short_code):
 
 AUTO_ARCHIVE_ALLOWED = {60, 1440, 4320, 10080}
 
+# Turn on later (e.g., set env USE_UNARCHIVE=1) when the bot has Manage Threads
+USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
+
 async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
     """
     Make sure the thread is unarchived (and optionally unlocked) before sending.
@@ -119,16 +122,19 @@ async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto
 
 async def ensure_thread_ready(thread_or_channel) -> bool:
     """
-    If it's a Thread: join it (idempotent) and unarchive it.
-    Returns True if it should be safe to send.
+    If it's a Thread: join it (idempotent). Only attempt unarchive when
+    USE_UNARCHIVE=1 (i.e., when the bot has Manage Threads).
     """
     if isinstance(thread_or_channel, discord.Thread):
         try:
-            # Join is cheap & idempotent; ignore errors
-            await thread_or_channel.join()
+            await thread_or_channel.join()  # safe to call repeatedly
         except Exception:
             pass
-        return await ensure_unarchived(thread_or_channel, unlock=True, auto_archive_minutes=10080)
+        if USE_UNARCHIVE:
+            return await ensure_unarchived(
+                thread_or_channel, unlock=True, auto_archive_minutes=10080
+            )
+        return True
     return True
 
 async def send_new_entries():
