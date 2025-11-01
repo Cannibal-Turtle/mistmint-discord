@@ -114,8 +114,7 @@ def post_message(thread_id: str, content: str, embed: dict | None = None, allowe
     headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
     payload = {
         "content": content or "",
-        "allowed_mentions": allowed_mentions if allowed_mentions is not None else {"parse": []},
-        "flags": 4  # suppress embeds in content
+        "allowed_mentions": allowed_mentions if allowed_mentions is not None else {"parse": []}
     }
     if embed:
         payload["embeds"] = [embed]
