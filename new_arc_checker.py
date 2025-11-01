@@ -23,15 +23,12 @@ import os
 import json
 import re
 import sys
+import time
 
-# try to load mapping package from your rss-feed repo
-try:
-    from novel_mappings import HOSTING_SITE_DATA, get_nsfw_novels
-except Exception as e:
-    print(f"⚠️ novel_mappings not available ({e}); using empty maps.")
-    HOSTING_SITE_DATA = {}
-    def get_nsfw_novels():
-        return set()
+from novel_mappings import (
+    HOSTING_SITE_DATA,
+    get_nsfw_novels,  # kept for parity; not used after removing ping header
+)
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
@@ -42,6 +39,19 @@ NSFW_ROLE_ID  = "<@&1343352825811439616>"  # detected but NOT mentioned
 
 # === DISCORD SEND ===
 
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+    url = f"https://discord.com/api/v10/channels/{thread_id}"
+    headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
+    payload = {"archived": False}
+    if unlock:
+        payload["locked"] = False
+    if auto_archive_minutes:
+        payload["auto_archive_duration"] = auto_archive_minutes  # 60, 1440, 4320, 10080
+    r = requests.patch(url, headers=headers, json=payload, timeout=15)
+    if not r.ok:
+        print(f"⚠️ Unarchive failed {r.status_code}: {r.text}")
+    return r.ok
+  
 def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
     """Ensure the bot is a member of the thread (handles 50001/403 cases)."""
     try:
@@ -76,24 +86,54 @@ def post_message(thread_id: str, content: str, embeds: list | None = None, suppr
     if suppress_embeds:
         payload["flags"] = 4
 
-    # first try
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
-    if r.status_code == 403:
-        # typical Discord errors: 50001 Missing Access, 50013 Missing Permissions
-        code = None
+    def _send():
+        return requests.post(url, headers=headers, json=payload, timeout=20)
+
+    r = _send()
+
+    # Fix archived / missing access, then retry once
+    if r.status_code in (400, 403):
         try:
-            code = r.json().get("code")
+            body = r.json()
         except Exception:
-            pass
-        if code in (50001, 50013) or "Missing Access" in r.text:
-            if ensure_bot_in_thread(BOT_TOKEN, thread_id):
-                r = requests.post(url, headers=headers, json=payload, timeout=20)
+            body = {"message": r.text}
+        msg  = (body.get("message") or "").lower()
+        code = body.get("code")
+
+        fixed = False
+        # e.g. "Cannot send messages in an archived thread"
+        if "archiv" in msg:
+            fixed = unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
+
+        # Missing Access / Missing Permissions → ensure membership
+        if not fixed and (code in (50001, 50013) or "missing access" in msg):
+            fixed = ensure_bot_in_thread(BOT_TOKEN, thread_id)
+
+        if fixed:
+            time.sleep(0.8)
+            r = _send()
+
+    # Handle rate limits (prefer header, fallback to body), then retry once
+    if r.status_code == 429:
+        wait = None
+        reset_after = r.headers.get("X-RateLimit-Reset-After") or r.headers.get("x-ratelimit-reset-after")
+        if reset_after:
+            try:
+                wait = float(reset_after)
+            except (TypeError, ValueError):
+                wait = None
+        if wait is None:
+            try:
+                wait = float(r.json().get("retry_after", 1.0))
+            except Exception:
+                wait = 1.0
+        time.sleep(max(0.0, min(wait, 5.0)))
+        r = _send()
 
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
     r.raise_for_status()
     return r
-
 
 # === FILE IO (history per novel) ===
 
@@ -407,6 +447,10 @@ def process_arc(novel, thread_id: str):
     # 5. Send to thread
     header_ok = False
     try:
+        # Preflight: join + unarchive to minimize 400/403 churn
+        ensure_bot_in_thread(BOT_TOKEN, thread_id)
+        unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
+
         post_message(thread_id, content_header, suppress_embeds=True)
         header_ok = True
         print(f"✅ Header sent: {new_full}")
