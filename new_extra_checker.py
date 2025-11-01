@@ -28,15 +28,12 @@ import sys
 import requests
 import feedparser
 import time
+import subprocess
 
-# try to import your mapping package from rss-feed repo
-try:
-    from novel_mappings import HOSTING_SITE_DATA, get_nsfw_novels
-except Exception as e:
-    print(f"⚠️ novel_mappings not available ({e}); using empty maps.")
-    HOSTING_SITE_DATA = {}
-    def get_nsfw_novels():
-        return set()
+from novel_mappings import (
+    HOSTING_SITE_DATA,
+    get_nsfw_novels,  # kept for parity; not used after removing ping header
+)
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 STATE_PATH      = "state.json"
@@ -47,6 +44,35 @@ BOT_TOKEN_ENV   = "DISCORD_BOT_TOKEN"
 
 # ─── DISCORD SEND (per-thread) ─────────────────────────────────────────────────
 
+def commit_state_update(path=STATE_PATH):
+    try:
+        subprocess.run(["git","config","--global","user.name","GitHub Actions"], check=True)
+        subprocess.run(["git","config","--global","user.email","actions@github.com"], check=True)
+        subprocess.run(["git","add", path], check=True)
+        # commit only if there are staged changes
+        staged = subprocess.run(["git","diff","--staged","--quiet"])
+        if staged.returncode != 0:
+            subprocess.run(["git","commit","-m", f"Auto-update: {os.path.basename(path)}"], check=True)
+            subprocess.run(["git","push","origin","main"], check=True)
+        else:
+            print(f"⚠️ No changes detected in {path}, skipping commit.")
+    except Exception as e:
+        print(f"❌ Git commit/push for {path} failed: {e}")
+      
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+    """Unarchive a thread so we can post. Needs MANAGE_THREADS."""
+    url = f"https://discord.com/api/v10/channels/{thread_id}"
+    headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
+    payload = {"archived": False}
+    if unlock:
+        payload["locked"] = False            # if it was locked on archive
+    if auto_archive_minutes:
+        payload["auto_archive_duration"] = auto_archive_minutes  # 60, 1440, 4320, 10080
+    r = requests.patch(url, headers=headers, json=payload, timeout=15)
+    if not r.ok:
+        print(f"⚠️ Unarchive failed {r.status_code}: {r.text}")
+    return r.ok
+  
 def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
     """Ensure the bot is a member of the thread (handles 50001/403 cases)."""
     try:
@@ -84,33 +110,51 @@ def send_bot_message(bot_token: str, thread_id: str, content: str):
     # 1) first attempt
     r = requests.post(url, headers=headers, json=payload, timeout=20)
 
-    # 2) handle Missing Access / Missing Permissions by joining then retrying once
-    if r.status_code == 403:
-        code = None
+    # 2) handle archived/missing access, then retry once
+    if r.status_code in (400, 403):
         try:
-            code = r.json().get("code")
+            body = r.json()
         except Exception:
-            pass
-        if code in (50001, 50013) or "Missing Access" in (r.text or ""):
-            if ensure_bot_in_thread(bot_token, thread_id):
-                r = requests.post(url, headers=headers, json=payload, timeout=20)
-            else:
-                print(f"⚠️ Could not join thread {thread_id}; skipping retry")
+            body = {"message": r.text}
+        msg  = (body.get("message") or "").lower()
+        code = body.get("code")
 
-    # 3) simple rate-limit backoff
+        archived_hint  = ("archiv" in msg)  # "Cannot send messages in an archived thread"
+        missing_access = ("missing access" in msg) or (code in (50001, 50013))
+
+        fixed = False
+        if archived_hint:
+            fixed = unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
+        if not fixed and missing_access:
+            fixed = ensure_bot_in_thread(bot_token, thread_id)
+
+        if fixed:
+            time.sleep(0.8)
+            r = requests.post(url, headers=headers, json=payload, timeout=20)
+
+    # 3) rate limit backoff: prefer header, fallback to body
     if r.status_code == 429:
-        try:
-            wait = float(r.json().get("retry_after", 1.0))
-        except Exception:
-            wait = 1.0
-        time.sleep(min(wait, 5.0))
+        wait = None
+        reset_after = r.headers.get("X-RateLimit-Reset-After")
+        if reset_after:
+            try:
+                wait = float(reset_after)
+            except (TypeError, ValueError):
+                wait = None
+        if wait is None:
+            try:
+                wait = float(r.json().get("retry_after", 1.0))
+            except Exception:
+                wait = 1.0
+        time.sleep(min(max(wait, 0.0), 5.0))
         r = requests.post(url, headers=headers, json=payload, timeout=20)
 
+    # ✅ make the result authoritative for callers
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
-    r.raise_for_status()
-    return r
+        r.raise_for_status()
 
+    return r
 
 def safe_send_bot(bot_token: str, thread_id: str, content: str) -> bool:
     try:
@@ -320,16 +364,21 @@ def process_extras(novel: dict):
         f"<:turtlelovefamily:1365266991690285156> :heart_hands:"
     )
 
+    # ensure we can post before sending
     bot_token = os.getenv(BOT_TOKEN_ENV, "").strip()
     if not bot_token:
         print("❌ Missing DISCORD_BOT_TOKEN; cannot post")
         return
+
+    ensure_bot_in_thread(bot_token, thread_id)
+    unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
 
     if safe_send_bot(bot_token, thread_id, msg):
         # update state
         meta["last_extra_announced"] = current
         meta["extra_announced"]      = True     # never fire again
         save_state(state)
+        commit_state_update(STATE_PATH)
 
 
 # ─── ENTRYPOINT ────────────────────────────────────────────────────────────────
