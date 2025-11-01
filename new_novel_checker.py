@@ -149,55 +149,43 @@ def send_bot_message_embed(bot_token: str, channel_or_thread_id: str, content: s
     payload = {
         "content": content or "",
         "embeds": [embed],
-        "allowed_mentions": {"parse": []},  # keep pings off for Mistmint
+        # keep mentions flexible per your setup
     }
 
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
+    def _post():
+        return requests.post(url, headers=headers, json=payload, timeout=20)
 
-    # Handle archived/missing access, then retry once
+    r = _post()
+
+    # If archived/membership issues, try to join and post once more
     if r.status_code in (400, 403):
+        body = {}
         try:
             body = r.json()
         except Exception:
-            body = {"message": r.text}
+            pass
         msg  = (body.get("message") or "").lower()
         code = body.get("code")
 
-        archived_hint  = ("archiv" in msg)  # e.g. "Cannot send messages in an archived thread"
-        missing_access = ("missing access" in msg) or (code in (50001, 50013))
-
-        did_fix = False
-        if archived_hint:
-            did_fix = unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
-        if not did_fix and missing_access:
-            did_fix = _ensure_bot_in_thread(bot_token, channel_or_thread_id)
-
-        if did_fix:
+        # If it's archived or missing access, try joining the thread (no PATCH)
+        if ("archiv" in msg) or ("missing access" in msg) or (code in (50001, 50013)):
+            _ensure_bot_in_thread(bot_token, channel_or_thread_id)
+            # small backoff
             time.sleep(0.8)
-            r = requests.post(url, headers=headers, json=payload, timeout=20)
+            r = _post()
 
-    # Rate limit → use header if present, then retry once
+    # Respect rate limit once
     if r.status_code == 429:
         wait = None
-
-        # Try header first (Discord sends seconds as a string)
         reset_after = r.headers.get("X-RateLimit-Reset-After")
         if reset_after:
-            try:
-                wait = float(reset_after)
-            except (TypeError, ValueError):
-                wait = None
-
-        # Fallback to JSON body retry_after
+            try: wait = float(reset_after)
+            except (TypeError, ValueError): pass
         if wait is None:
-            try:
-                j = r.json()
-                wait = float(j.get("retry_after", 1.0))
-            except Exception:
-                wait = 1.0
-
-        time.sleep(min(max(wait, 0.0), 5.0))
-        r = requests.post(url, headers=headers, json=payload, timeout=20)
+            try: wait = float(r.json().get("retry_after", 1.0))
+            except Exception: wait = 1.0
+        time.sleep(min(max(wait or 1.0, 0.0), 5.0))
+        r = _post()
 
     if not r.ok:
         raise requests.HTTPError(f"{r.status_code} {r.text}", response=r)
@@ -209,7 +197,10 @@ def safe_send_bot_embed(bot_token: str, channel_or_thread_id: str, content: str,
     except requests.HTTPError as e:
         status = e.response.status_code if e.response else "?"
         body   = e.response.text if e.response else ""
-        print(f"⚠️ Bot send failed ({status}):\n{body}", file=sys.stderr)
+        print(f"⚠️ Bot send failed ({status}): {body}", file=sys.stderr)
+        # Helpful hint if locked
+        if "locked" in body.lower():
+            print("ℹ️ Thread appears LOCKED. Unlock or grant the bot Manage Threads.", file=sys.stderr)
         return False
     except requests.RequestException as e:
         print(f"⚠️ Bot send error: {e}", file=sys.stderr)
@@ -482,9 +473,8 @@ def main():
 
             print(f"→ Built launch message for {novel_title} ({len(content_msg)} chars + 1 embed)")
 
-            # Ensure bot can post (join + unarchive just-in-time)
+            # Ensure bot can post (join thread)
             _ensure_bot_in_thread(bot_token, thread_id)
-            unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
 
             ok = safe_send_bot_embed(
                 bot_token=bot_token,
