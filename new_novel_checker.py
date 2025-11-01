@@ -311,7 +311,7 @@ def build_launch_content(
         "<a:hellokittydance:1365566988826705960>\n"
         "Updates will continue regularly, so hop in early and start reading now <a:2713pandaroll:1368137698212184136> \n"
         f"{'<a:6535_flower_border:1368146360871948321>' * 10}\n"
-        f"-# To get notifications for new updates, follow {follow_thread_url}"
+        f"-# To get notifications for new updates, open <#{thread_id}> and set the bell to **All Messages** <a:LoveLetter:1365575475841339435>"
     )
 
 
@@ -328,11 +328,11 @@ def build_launch_embed(
     iso_timestamp = chap_dt_local.astimezone(timezone.utc).isoformat()
     embed = {
         "author": {
-            "name": f"{translator} <a:Bow:1365575505171976246>"
+            "name": f"{translator} ⋆. 𐙚"
         },
         "title": title,
         "url": novel_url,
-        "description": desc_text,
+        "description": f"<a:Bow:1365575505171976246> {desc_text}",
         "image": {"url": cover_url},
         "footer": {"text": host_name, "icon_url": host_logo_url},
         "color": 0xAEC6CF,
