@@ -39,6 +39,9 @@ from novel_mappings import (
 STATE_PATH      = "state.json"
 HOST_TARGET     = "Mistmint Haven"
 BOT_TOKEN_ENV   = "DISCORD_BOT_TOKEN"
+
+# Only attempt PATCH /channels/{id} if the bot has Manage Threads
+USE_UNARCHIVE   = os.getenv("USE_UNARCHIVE", "0") == "1"
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -97,20 +100,22 @@ def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
 def send_bot_message(bot_token: str, thread_id: str, content: str):
     """POST to thread; auto-join on Missing Access and retry; simple 429 backoff."""
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
-    headers = {
-        "Authorization": f"Bot {bot_token}",
-        "Content-Type":  "application/json"
-    }
+    headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
     payload = {
         "content": content or "",
-        "allowed_mentions": {"parse": []},   # no pings for Mistmint
-        "flags": 4                            # suppress embeds for clean text
+        "allowed_mentions": {"parse": []},  # no pings for Mistmint
+        "flags": 4                           # suppress embeds for clean text
     }
 
-    # 1) first attempt
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
+    # Preflight: join (idempotent)
+    ensure_bot_in_thread(bot_token, thread_id)
 
-    # 2) handle archived/missing access, then retry once
+    def _send():
+        return requests.post(url, headers=headers, json=payload, timeout=20)
+
+    r = _send()
+
+    # Archived / missing access → fix once and retry
     if r.status_code in (400, 403):
         try:
             body = r.json()
@@ -119,23 +124,23 @@ def send_bot_message(bot_token: str, thread_id: str, content: str):
         msg  = (body.get("message") or "").lower()
         code = body.get("code")
 
-        archived_hint  = ("archiv" in msg)  # "Cannot send messages in an archived thread"
-        missing_access = ("missing access" in msg) or (code in (50001, 50013))
-
         fixed = False
-        if archived_hint:
-            fixed = unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
-        if not fixed and missing_access:
+        if "archiv" in msg:
+            if USE_UNARCHIVE:
+                fixed = unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
+            else:
+                print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching. Unlock it or grant Manage Threads.")
+        if not fixed and (code in (50001, 50013) or "missing access" in msg):
             fixed = ensure_bot_in_thread(bot_token, thread_id)
 
         if fixed:
             time.sleep(0.8)
-            r = requests.post(url, headers=headers, json=payload, timeout=20)
+            r = _send()
 
-    # 3) rate limit backoff: prefer header, fallback to body
+    # Rate limit backoff (prefer header; fallback to body)
     if r.status_code == 429:
         wait = None
-        reset_after = r.headers.get("X-RateLimit-Reset-After")
+        reset_after = r.headers.get("X-RateLimit-Reset-After") or r.headers.get("x-ratelimit-reset-after")
         if reset_after:
             try:
                 wait = float(reset_after)
@@ -147,13 +152,11 @@ def send_bot_message(bot_token: str, thread_id: str, content: str):
             except Exception:
                 wait = 1.0
         time.sleep(min(max(wait, 0.0), 5.0))
-        r = requests.post(url, headers=headers, json=payload, timeout=20)
+        r = _send()
 
-    # ✅ make the result authoritative for callers
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
         r.raise_for_status()
-
     return r
 
 def safe_send_bot(bot_token: str, thread_id: str, content: str) -> bool:
@@ -369,14 +372,14 @@ def process_extras(novel: dict):
     if not bot_token:
         print("❌ Missing DISCORD_BOT_TOKEN; cannot post")
         return
-
+    
     ensure_bot_in_thread(bot_token, thread_id)
-    unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
-
+    if USE_UNARCHIVE:
+        unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
+    
     if safe_send_bot(bot_token, thread_id, msg):
-        # update state
         meta["last_extra_announced"] = current
-        meta["extra_announced"]      = True     # never fire again
+        meta["extra_announced"]      = True  # never fire again
         save_state(state)
         commit_state_update(STATE_PATH)
 
