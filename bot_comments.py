@@ -29,13 +29,16 @@ from dateutil import parser as dateparser
 from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-BOT_TOKEN    = os.environ["DISCORD_BOT_TOKEN"]
-STATE_FILE   = "state_rss.json"
-FEED_KEY     = "comments_last_guid"
-RSS_URL      = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
+BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
+STATE_FILE    = "state_rss.json"
+FEED_KEY      = "comments_last_guid"
+RSS_URL       = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
 
-HOST_TARGET  = "Mistmint Haven"          # only post Mistmint comments
+HOST_TARGET   = "Mistmint Haven"          # only post Mistmint comments
 USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
+
+# Hardcoded user to ping (your Discord USER id, not a role)
+PING_USER_ID  = "603578473814032414"
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -91,14 +94,12 @@ def ensure_bot_in_thread(thread_id: str) -> bool:
     """Ensure the bot is a member of the thread (handles 50001/403 cases)."""
     try:
         h = {"Authorization": f"Bot {BOT_TOKEN}"}
-        # already a member?
         r = requests.get(
             f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
             headers=h, timeout=15
         )
         if r.status_code == 200:
             return True
-        # try join
         j = requests.put(
             f"https://discord.com/api/v10/channels/{thread_id}/thread-members/@me",
             headers=h, timeout=15
@@ -107,14 +108,14 @@ def ensure_bot_in_thread(thread_id: str) -> bool:
     except requests.RequestException:
         return False
 
-def post_message(thread_id: str, content: str, embed: dict | None = None):
+def post_message(thread_id: str, content: str, embed: dict | None = None, allowed_mentions: dict | None = None):
     """POST to thread with one-shot recovery for archived/missing access + 429 backoff."""
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
     headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
     payload = {
         "content": content or "",
-        "allowed_mentions": {"parse": []},  # no pings for Mistmint
-        "flags": 4                          # suppress embeds in content
+        "allowed_mentions": allowed_mentions if allowed_mentions is not None else {"parse": []},
+        "flags": 4  # suppress embeds in content
     }
     if embed:
         payload["embeds"] = [embed]
@@ -200,7 +201,6 @@ def main():
             new_last = guid
             continue
 
-        role_id     = (entry.get("discord_role_id") or "").strip()
         author      = entry.get("author") or entry.get("dc_creator", "") or "anonymous"
         chapter     = (entry.get("chapter") or "").strip()
         comment_txt = (entry.get("description") or "").strip()
@@ -215,11 +215,8 @@ def main():
         end_marker   = "❜❜"
         ellipsis     = "..."
         content_max  = 256 - len(start_marker) - len(end_marker) - len(ellipsis)
-        if len(comment_txt) > content_max:
-            safe_comment = comment_txt[:content_max].rstrip() + ellipsis
-        else:
-            safe_comment = comment_txt
-        full_title = f"{start_marker}{safe_comment}{end_marker}"
+        safe_comment = (comment_txt[:content_max].rstrip() + ellipsis) if len(comment_txt) > content_max else comment_txt
+        full_title   = f"{start_marker}{safe_comment}{end_marker}"
 
         embed = {
             "author": {
@@ -237,10 +234,17 @@ def main():
         if reply_chain:
             embed["description"] = reply_chain
 
-        content = f"<a:7977heartslike:1368146209981857792> New comment for **{novel_title}** || {role_id}"
+        # Build content; only add the " || " if we actually have a mention
+        user_mention = f"<@{PING_USER_ID}>" if PING_USER_ID else ""
+        content = f"<a:7977heartslike:1368146209981857792> New comment for **{novel_title}**"
+        if user_mention:
+            content += f" || {user_mention}"
+
+        # Only allow your user mention to ping
+        allowed = {"parse": [], "users": [PING_USER_ID]} if PING_USER_ID else {"parse": []}
 
         try:
-            post_message(thread_id, content, embed)
+            post_message(thread_id, content, embed, allowed_mentions=allowed)
             print(f"✅ Sent comment {guid} → thread {thread_id}")
             new_last = guid
         except requests.HTTPError as e:
