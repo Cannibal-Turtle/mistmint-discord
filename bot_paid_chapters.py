@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+from discord.errors import Forbidden, HTTPException, NotFound
 import os
 import re
 import json
 import asyncio
-from datetime import datetime, timezone
+from datetime import timezone
 import feedparser
 from dateutil import parser as dateparser
 
@@ -22,19 +23,59 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/pa
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 # ───────────────────────────────────────────────────────────────────────────────
 
+AUTO_ARCHIVE_ALLOWED = {60, 1440, 4320, 10080}
+
+async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+    """Unarchive + optionally unlock; tolerate servers that disallow 10080."""
+    if not isinstance(thread, discord.Thread):
+        return True
+    duration = min(AUTO_ARCHIVE_ALLOWED, key=lambda v: abs(v - auto_archive_minutes))
+    try:
+        await thread.edit(archived=False, locked=(not unlock), auto_archive_duration=duration)
+        return True
+    except Forbidden:
+        try:
+            await thread.join()
+        except Exception:
+            pass
+        try:
+            await thread.edit(archived=False, locked=(not unlock), auto_archive_duration=duration)
+            return True
+        except Exception as e:
+            print(f"⚠️ Could not unarchive thread {thread.id}: {e}")
+            return False
+    except HTTPException as e:
+        if e.status == 400:
+            try:
+                await thread.edit(archived=False, locked=(not unlock))
+                return True
+            except Exception as e2:
+                print(f"⚠️ Unarchive retry (no duration) failed for {thread.id}: {e2}")
+                return False
+        print(f"⚠️ HTTPException unarchiving {thread.id}: {e}")
+        return False
+    except Exception as e:
+        print(f"⚠️ Unexpected error unarchiving {thread.id}: {e}")
+        return False
+
+async def ensure_thread_ready(thread_or_channel) -> bool:
+    """If Thread: join then unarchive. Return True if safe to send."""
+    if isinstance(thread_or_channel, discord.Thread):
+        try:
+            await thread_or_channel.join()
+        except Exception:
+            pass
+        return await ensure_unarchived(thread_or_channel, unlock=True, auto_archive_minutes=10080)
+    return True
+
 def find_short_code_for_entry(entry):
-    # A) try explicit field if your script/feed ever adds it
     sc = (entry.get('short_code') or entry.get('shortcode') or '').strip()
     if sc:
         return sc.upper()
-
-    # B) parse from guid like "tdlbkgc-1"
     gid = (entry.get('guid') or entry.get('id') or '')
     m = re.match(r'([a-z0-9_]+)-', str(gid), re.I)
     if m:
         return m.group(1).upper()
-
-    # C) map by (host, title) from HOSTING_SITE_DATA
     host  = (entry.get('host') or '').strip()
     title = (entry.get('title') or '').strip()
     host_block = HOSTING_SITE_DATA.get(host, {})
@@ -43,9 +84,8 @@ def find_short_code_for_entry(entry):
             sc = (details.get('short_code') or '').strip()
             if sc:
                 return sc.upper()
+    return ''
 
-    return ''  # give up
-    
 def load_state():
     try:
         return json.load(open(STATE_FILE, encoding="utf-8"))
@@ -65,14 +105,6 @@ def _guid(e): return _norm(e.get("guid") or e.get("id")) or None
 def _is_mistmint(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
     return host.lower() == HOST_NAME_TARGET.lower()
-
-def _short_code(e):
-    for k in ("short_code", "shortcode", "shortCode", "short"):
-        v = e.get(k)
-        if v: return _norm(v)
-    meta = e.get("meta") or {}
-    v = meta.get("short_code") or meta.get("shortcode") or meta.get("shortCode")
-    return _norm(v) if v else None
 
 def _thread_id_for(short_code):
     if not short_code: return None
@@ -163,22 +195,21 @@ async def send_new_paid_entries():
                 print(f"⚠️ Skip: no {short_code.upper()}_THREAD_ID secret set for guid={guid}")
                 continue
 
-            dest = bot.get_channel(thread_id)
-            if dest is None:
-                try:
-                    dest = await bot.fetch_channel(thread_id)
-                except Exception as e:
-                    print(f"❌ Skip: cannot resolve thread {thread_id} for guid={guid} ({e})")
-                    continue
-
-            # Ensure the bot is a member of the thread before sending
+            # Resolve the destination channel/thread safely
             try:
-                if isinstance(dest, discord.Thread):
-                    await dest.join()
-            except discord.Forbidden:
-                pass
+                dest = bot.get_channel(thread_id) or await bot.fetch_channel(thread_id)
+            except (Forbidden, NotFound) as e:
+                print(f"⚠️ Cannot access thread {thread_id}: {e}. Skipping {guid}.")
+                continue
             except Exception as e:
-                print(f"⚠️ Could not join thread {thread_id}: {e}")
+                print(f"⚠️ Error fetching thread {thread_id}: {e}. Skipping {guid}.")
+                continue
+
+            # Make sure we can actually post (join + unarchive + set auto-archive if allowed)
+            ok = await ensure_thread_ready(dest)
+            if not ok:
+                print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
+                continue
 
             # ── Build content (no role/global mentions)
             title_text  = _norm(entry.get("title"))
@@ -196,7 +227,7 @@ async def send_new_paid_entries():
             host        = _norm(entry.get("host"))
             thumb_url   = (entry.get("featuredImage") or entry.get("featuredimage") or {}).get("url")
             host_logo   = (entry.get("hostLogo") or entry.get("hostlogo") or {}).get("url")
-            pub_raw     = getattr(entry, "published", None)
+            pub_raw     = entry.get("published")
             timestamp = dateparser.parse(pub_raw) if pub_raw else None
             if timestamp and timestamp.tzinfo is None:
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
@@ -225,7 +256,30 @@ async def send_new_paid_entries():
             view = View()
             view.add_item(btn)
 
-            await dest.send(content=content, embed=embed, view=view)
+            # ── Send with one graceful retry if needed
+            try:
+                await dest.send(
+                    content=content,
+                    embed=embed,
+                    view=view,
+                    allowed_mentions=discord.AllowedMentions.none()
+                )
+            except HTTPException as e:
+                if isinstance(dest, discord.Thread) and e.status in (400, 403):
+                    if await ensure_thread_ready(dest):
+                        await dest.send(
+                            content=content,
+                            embed=embed,
+                            view=view,
+                            allowed_mentions=discord.AllowedMentions.none()
+                        )
+                    else:
+                        print(f"⚠️ Send retry failed for {thread_id}: {e}")
+                        continue
+                else:
+                    print(f"⚠️ Send failed for {thread_id}: {e}")
+                    continue
+
             print(f"📨 Sent paid: {chaptername} / {guid} → thread {thread_id}")
             new_last = guid
 
