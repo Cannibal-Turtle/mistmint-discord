@@ -34,6 +34,9 @@ from novel_mappings import (
 BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
 HOST_TARGET   = "Mistmint Haven"   # only handle Mistmint
 NSFW_ROLE_ID  = "<@&1343352825811439616>"  # detected but NOT mentioned
+
+# Only attempt PATCH /channels/{id} if the bot has Manage Threads
+USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -74,7 +77,6 @@ def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
 
 
 def post_message(thread_id: str, content: str, embeds: list | None = None, suppress_embeds: bool = False):
-    """HTTP sender that auto-joins the thread on Missing Access and retries once."""
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
     headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
     payload = {
@@ -86,12 +88,15 @@ def post_message(thread_id: str, content: str, embeds: list | None = None, suppr
     if suppress_embeds:
         payload["flags"] = 4
 
+    # Preflight: join thread (idempotent)
+    ensure_bot_in_thread(BOT_TOKEN, thread_id)
+
     def _send():
         return requests.post(url, headers=headers, json=payload, timeout=20)
 
     r = _send()
 
-    # Fix archived / missing access, then retry once
+    # Single 400/403 handler (with USE_UNARCHIVE gate)
     if r.status_code in (400, 403):
         try:
             body = r.json()
@@ -101,11 +106,11 @@ def post_message(thread_id: str, content: str, embeds: list | None = None, suppr
         code = body.get("code")
 
         fixed = False
-        # e.g. "Cannot send messages in an archived thread"
         if "archiv" in msg:
-            fixed = unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
-
-        # Missing Access / Missing Permissions → ensure membership
+            if USE_UNARCHIVE:
+                fixed = unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
+            else:
+                print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching. Unlock it or grant Manage Threads.")
         if not fixed and (code in (50001, 50013) or "missing access" in msg):
             fixed = ensure_bot_in_thread(BOT_TOKEN, thread_id)
 
@@ -134,6 +139,7 @@ def post_message(thread_id: str, content: str, embeds: list | None = None, suppr
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
     r.raise_for_status()
     return r
+  
 
 # === FILE IO (history per novel) ===
 
@@ -447,10 +453,11 @@ def process_arc(novel, thread_id: str):
     # 5. Send to thread
     header_ok = False
     try:
-        # Preflight: join + unarchive to minimize 400/403 churn
+        # Preflight: join; unarchive only when allowed
         ensure_bot_in_thread(BOT_TOKEN, thread_id)
-        unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
-
+        if USE_UNARCHIVE:
+            unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
+    
         post_message(thread_id, content_header, suppress_embeds=True)
         header_ok = True
         print(f"✅ Header sent: {new_full}")
