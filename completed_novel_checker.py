@@ -28,6 +28,8 @@ import sys
 from datetime import datetime
 
 import feedparser
+import time
+import subprocess
 import requests
 from dateutil.relativedelta import relativedelta
 
@@ -70,6 +72,22 @@ def save_state(state, path=STATE_PATH):
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
+def commit_state_update(path=STATE_PATH):
+    try:
+        subprocess.run(["git","config","--global","user.name","GitHub Actions"], check=True)
+        subprocess.run(["git","config","--global","user.email","actions@github.com"], check=True)
+        subprocess.run(["git","add", path], check=True)
+        # commit only if there are staged changes
+        staged = subprocess.run(["git","diff","--staged","--quiet"])
+        if staged.returncode != 0:
+            subprocess.run(["git","commit","-m", f"Auto-update: {os.path.basename(path)}"], check=True)
+            subprocess.run(["git","push","origin","main"], check=True)
+        else:
+            print(f"ℹ️ No changes detected in {path}, skipping commit.")
+    except Exception as e:
+        print(f"❌ Git commit/push for {path} failed: {e}")
+
+
 # ─── DISCORD SENDER ────────────────────────────────────────────────────────────
 def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
     """
@@ -88,9 +106,64 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
         # 4 = SUPPRESS_EMBEDS (keeps this as clean text wall)
         "flags": 4
     }
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
-    r.raise_for_status()
+  
+    def _send():
+        return requests.post(url, headers=headers, json=payload, timeout=20)
 
+    # Preflight: be in the thread and make sure it’s unarchived
+    ensure_bot_in_thread(bot_token, channel_or_thread_id)
+    unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+
+    r = _send()
+
+    # Fix archived / missing access once, then retry
+    if r.status_code in (400, 403):
+        try:
+            body = r.json()
+        except Exception:
+            body = {"message": r.text}
+        msg  = (body.get("message") or "").lower()
+        code = body.get("code")
+
+        recovered = False
+        if "archiv" in msg:
+            recovered = unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+        if not recovered and (code in (50001, 50013) or "missing access" in msg):
+            recovered = ensure_bot_in_thread(bot_token, channel_or_thread_id)
+
+        if recovered:
+            time.sleep(0.8)
+            r = _send()
+
+    # Rate limit: respect header, else body, then retry once
+    if r.status_code == 429:
+        wait = None
+        reset_after = r.headers.get("X-RateLimit-Reset-After") or r.headers.get("x-ratelimit-reset-after")
+        if reset_after:
+            try: wait = float(reset_after)
+            except (TypeError, ValueError): pass
+        if wait is None:
+            try: wait = float(r.json().get("retry_after", 1.0))
+            except Exception: wait = 1.0
+        time.sleep(max(0.0, min(wait or 1.0, 5.0)))
+        r = _send()
+
+    if not r.ok:
+        # Let caller’s try/except print useful diagnostics
+        r.raise_for_status()
+      
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+    url = f"https://discord.com/api/v10/channels/{thread_id}"
+    headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
+    payload = {"archived": False}
+    if unlock:
+        payload["locked"] = False
+    if auto_archive_minutes:
+        payload["auto_archive_duration"] = auto_archive_minutes  # 60, 1440, 4320, 10080
+    r = requests.patch(url, headers=headers, json=payload, timeout=15)
+    if not r.ok:
+        print(f"⚠️ Unarchive failed {r.status_code}: {r.text}")
+    return r.ok
 
 def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
     try:
@@ -107,6 +180,10 @@ def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
 
 def safe_send_bot(bot_token: str, channel_or_thread_id: str, content: str) -> bool:
     try:
+        # one more gentle preflight (cheap idempotent calls)
+        ensure_bot_in_thread(bot_token, channel_or_thread_id)
+        unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+      
         send_bot_message(bot_token, channel_or_thread_id, content)
         return True
     except requests.HTTPError as e:
@@ -120,6 +197,7 @@ def safe_send_bot(bot_token: str, channel_or_thread_id: str, content: str) -> bo
 
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
+
 def get_duration(start_date_str: str, end_date: datetime) -> str:
     """
     Converts a start date (DD/MM/YYYY) to a human-readable duration vs end_date.
@@ -371,13 +449,14 @@ def main():
                 msg = build_only_free_completion(novel, chap_field, entry.link, duration)
                 print(f"→ Built message of {len(msg)} characters")
 
-                if ensure_bot_in_thread(bot_token, thread_id) and safe_send_bot(bot_token, thread_id, msg):
+                if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent only-free completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["only_free_completion"] = {
                         "chapter": chap_field,
                         "sent_at": datetime.now().isoformat()
                     }
                     save_state(state)
+                    commit_state_update(STATE_PATH)
                 else:
                     print(f"→ Not marking {novel_id} as only_free_completion (send failed)")
                 break
@@ -392,13 +471,14 @@ def main():
                 msg = build_paid_completion(novel, chap_field, entry.link, duration)
                 print(f"→ Built message of {len(msg)} characters")
 
-                if ensure_bot_in_thread(bot_token, thread_id) and safe_send_bot(bot_token, thread_id, msg):
+                if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent paid-completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["paid_completion"] = {
                         "chapter": chap_field,
                         "sent_at": datetime.now().isoformat()
                     }
                     save_state(state)
+                    commit_state_update(STATE_PATH)
                 else:
                     print(f"→ Not marking {novel_id} as paid_completion (send failed)")
                 break
@@ -412,13 +492,14 @@ def main():
                 msg = build_free_completion(novel, chap_field, entry.link)
                 print(f"→ Built message of {len(msg)} characters")
 
-                if ensure_bot_in_thread(bot_token, thread_id) and safe_send_bot(bot_token, thread_id, msg):
+                if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent free-completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["free_completion"] = {
                         "chapter": chap_field,
                         "sent_at": datetime.now().isoformat()
                     }
                     save_state(state)
+                    commit_state_update(STATE_PATH)
                 else:
                     print(f"→ Not marking {novel_id} as free_completion (send failed)")
                 break
