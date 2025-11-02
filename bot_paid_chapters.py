@@ -98,29 +98,46 @@ async def ensure_thread_ready(thread_or_channel) -> bool:
     return True
 
 def find_short_code_for_entry(entry):
-    # A) try explicit field if your script/feed ever adds it
-    sc = (entry.get('short_code') or entry.get('shortcode') or '').strip()
+    # helper to fetch the first present key, case-insensitive
+    def first(*keys):
+        for k in keys:
+            v = entry.get(k)
+            if v:
+                return str(v)
+            v = entry.get(k.lower()) or entry.get(k.upper())
+            if v:
+                return str(v)
+        return ""
+
+    host  = (first("host") or "").strip()
+    title = (first("title") or "").strip()
+
+    # 1) Mapping-first (case-insensitive title match)
+    novels  = (HOSTING_SITE_DATA.get(host, {}) or {}).get("novels", {}) or {}
+    details = novels.get(title)
+    if not details:
+        for k, v in novels.items():
+            if k.casefold() == title.casefold():
+                details = v
+                break
+
+    sc = (details or {}).get("short_code")
+    if sc:
+        return str(sc).strip().upper()
+
+    # 2) Feed-provided short_code
+    sc = (first("short_code", "shortcode", "shortCode", "short") or "").strip()
     if sc:
         return sc.upper()
 
-    # B) parse from guid like "tdlbkgc-1"
-    gid = (entry.get('guid') or entry.get('id') or '')
-    m = re.match(r'([a-z0-9_]+)-', str(gid), re.I)
+    # 3) Parse from GUID like "tdlbkgc-1"
+    gid = (first("guid", "id") or "").strip()
+    m = re.match(r"([a-z0-9_]+)-", gid, re.I)
     if m:
         return m.group(1).upper()
 
-    # C) map by (host, title) from HOSTING_SITE_DATA
-    host  = (entry.get('host') or '').strip()
-    title = (entry.get('title') or '').strip()
-    host_block = HOSTING_SITE_DATA.get(host, {})
-    for novel_title, details in host_block.get('novels', {}).items():
-        if novel_title == title:
-            sc = (details.get('short_code') or '').strip()
-            if sc:
-                return sc.upper()
-
-    return ''  # give up
-
+    # 4) Give up
+    return ""
 
 def load_state():
     try:
