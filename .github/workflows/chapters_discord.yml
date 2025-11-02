@@ -52,7 +52,7 @@ jobs:
         if: >
           github.event_name == 'schedule' ||
           github.event_name == 'workflow_dispatch' ||
-          (github.event_name == 'repository_dispatch' && github.event.client_payload.feed == '')
+          (github.event_name == 'repository_dispatch' && github.event.client_payload.feed == 'paid')
         timeout-minutes: 5
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
