@@ -1,8 +1,8 @@
 name: Check RSS & Send Comments
 
 on:
-  repository_dispatch:
-    types: [trigger-discord-comments]
+  #repository_dispatch:
+    #types: [trigger-discord-comments]
   workflow_dispatch:
 
 concurrency:
