@@ -1,4 +1,4 @@
-name: Fix Mistmint embed image (URL only, multi)
+name: Fix Mistmint embed thumbnail (URL only)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Update embed images to S3 URL
+      - name: Update embeds to thumbnail
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
@@ -27,41 +27,84 @@ jobs:
           MSG_IDS    = [
             "1434082796908838986",
             "1434514466543767583",
+            # If you also want to revert the first message, add:
+            # "1434079266806435954",
           ]
-          IMG = "https://web-novel-mistmint.s3.ap-southeast-1.amazonaws.com/novels/dd6947d3-dd7f-4c5b-a42c-aaba5363502b.png"
+          THUMB = "https://web-novel-mistmint.s3.ap-southeast-1.amazonaws.com/novels/dd6947d3-dd7f-4c5b-a42c-aaba5363502b.png"
 
           base = "https://discord.com/api/v10"
           H = {"Authorization": BOT}
 
-          # Join thread if needed (no-op if already in)
+          # Safe-join the thread (no-op if already a member)
           r = requests.get(f"{base}/channels/{THREAD_ID}/thread-members/@me", headers=H, timeout=15)
           if r.status_code != 200:
               requests.put(f"{base}/channels/{THREAD_ID}/thread-members/@me", headers=H, timeout=15)
 
-          def patch_message(mid: str):
+          # Only keep embed keys that Discord accepts on edit
+          def sanitize_embed(e):
+              out = {}
+              # simple scalars
+              for k in ("title","type","description","url","timestamp","color"):
+                  if k in e: out[k] = e[k]
+              # footer
+              f = e.get("footer") or {}
+              if isinstance(f, dict):
+                  fo = {}
+                  if "text" in f: fo["text"] = f["text"]
+                  if "icon_url" in f: fo["icon_url"] = f["icon_url"]
+                  if fo: out["footer"] = fo
+              # author
+              a = e.get("author") or {}
+              if isinstance(a, dict):
+                  ao = {}
+                  if "name" in a: ao["name"] = a["name"]
+                  if "url" in a: ao["url"] = a["url"]
+                  if "icon_url" in a: ao["icon_url"] = a["icon_url"]
+                  if ao: out["author"] = ao
+              # fields
+              fs = e.get("fields") or []
+              F = []
+              for fld in fs:
+                  if not isinstance(fld, dict): continue
+                  name = fld.get("name"); value = fld.get("value")
+                  if name is None or value is None: continue
+                  item = {"name": name, "value": value}
+                  if "inline" in fld: item["inline"] = bool(fld["inline"])
+                  F.append(item)
+              if F: out["fields"] = F
+              return out
+
+          def patch(mid):
               m = requests.get(f"{base}/channels/{THREAD_ID}/messages/{mid}", headers=H, timeout=15)
               m.raise_for_status()
               msg = m.json()
 
               embeds = msg.get("embeds") or [{}]
-              e0 = dict(embeds[0])  # preserve existing fields
-              e0["image"] = {"url": IMG}
-              new_embeds = [e0] + embeds[1:]
+              new_embeds = []
+              for i, e in enumerate(embeds):
+                  se = sanitize_embed(e)
+                  # ensure no full-size image
+                  if "image" in se:
+                      del se["image"]
+                  # set side thumbnail
+                  se["thumbnail"] = {"url": THUMB}
+                  new_embeds.append(se)
 
-              old_atts = [{"id": str(a["id"]), "filename": a["filename"]} for a in msg.get("attachments", [])]
               payload = {"embeds": new_embeds}
-              if old_atts:
-                  payload["attachments"] = old_atts
+
+              # preserve any existing attachments (if there are any)
+              atts = [{"id": str(a["id"]), "filename": a["filename"]} for a in msg.get("attachments", [])]
+              if atts:
+                  payload["attachments"] = atts
 
               r = requests.patch(
                   f"{base}/channels/{THREAD_ID}/messages/{mid}",
                   headers={**H, "Content-Type":"application/json"},
-                  json=payload,
-                  timeout=30
+                  json=payload, timeout=30
               )
               r.raise_for_status()
-              print(f"✅ Updated message {mid}")
+              print(f"✅ Updated message {mid} → thumbnail set")
 
           for mid in MSG_IDS:
-              patch_message(mid)
+              patch(mid)
           PY
