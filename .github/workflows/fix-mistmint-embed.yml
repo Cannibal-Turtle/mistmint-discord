@@ -1,4 +1,4 @@
-name: Fix Mistmint embed image (URL only)
+name: Fix Mistmint embed image (URL only, multi)
 
 on:
   workflow_dispatch:
@@ -15,15 +15,19 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Update embed image to S3 URL
+      - name: Update embed images to S3 URL
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
           python - << 'PY'
           import os, json, requests
+
           BOT = f"Bot {os.environ['DISCORD_BOT_TOKEN']}"
           THREAD_ID  = "1434025746468311050"
-          MESSAGE_ID = "1434079266806435954"
+          MSG_IDS    = [
+            "1434082796908838986",
+            "1434514466543767583",
+          ]
           IMG = "https://web-novel-mistmint.s3.ap-southeast-1.amazonaws.com/novels/dd6947d3-dd7f-4c5b-a42c-aaba5363502b.png"
 
           base = "https://discord.com/api/v10"
@@ -34,28 +38,30 @@ jobs:
           if r.status_code != 200:
               requests.put(f"{base}/channels/{THREAD_ID}/thread-members/@me", headers=H, timeout=15)
 
-          # Fetch message so we preserve all other fields
-          m = requests.get(f"{base}/channels/{THREAD_ID}/messages/{MESSAGE_ID}", headers=H, timeout=15)
-          m.raise_for_status()
-          msg = m.json()
+          def patch_message(mid: str):
+              m = requests.get(f"{base}/channels/{THREAD_ID}/messages/{mid}", headers=H, timeout=15)
+              m.raise_for_status()
+              msg = m.json()
 
-          embeds = msg.get("embeds") or [{}]
-          e0 = dict(embeds[0])
-          e0["image"] = {"url": IMG}
-          new_embeds = [e0] + embeds[1:]
+              embeds = msg.get("embeds") or [{}]
+              e0 = dict(embeds[0])  # preserve existing fields
+              e0["image"] = {"url": IMG}
+              new_embeds = [e0] + embeds[1:]
 
-          # Keep any existing attachments
-          old_atts = [{"id": str(a["id"]), "filename": a["filename"]} for a in msg.get("attachments", [])]
-          payload = {"embeds": new_embeds}
-          if old_atts:
-              payload["attachments"] = old_atts
+              old_atts = [{"id": str(a["id"]), "filename": a["filename"]} for a in msg.get("attachments", [])]
+              payload = {"embeds": new_embeds}
+              if old_atts:
+                  payload["attachments"] = old_atts
 
-          r = requests.patch(
-              f"{base}/channels/{THREAD_ID}/messages/{MESSAGE_ID}",
-              headers={**H, "Content-Type":"application/json"},
-              json=payload,
-              timeout=30
-          )
-          r.raise_for_status()
-          print("✅ Embed image updated to S3 URL")
+              r = requests.patch(
+                  f"{base}/channels/{THREAD_ID}/messages/{mid}",
+                  headers={**H, "Content-Type":"application/json"},
+                  json=payload,
+                  timeout=30
+              )
+              r.raise_for_status()
+              print(f"✅ Updated message {mid}")
+
+          for mid in MSG_IDS:
+              patch_message(mid)
           PY
