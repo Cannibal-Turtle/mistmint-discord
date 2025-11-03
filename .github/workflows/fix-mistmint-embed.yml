@@ -12,13 +12,15 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Install dependencies
+        run: pip install requests
+
       - name: Update embed image to S3 URL
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
           python - << 'PY'
           import os, json, requests
-
           BOT = f"Bot {os.environ['DISCORD_BOT_TOKEN']}"
           THREAD_ID  = "1434025746468311050"
           MESSAGE_ID = "1434079266806435954"
@@ -27,22 +29,22 @@ jobs:
           base = "https://discord.com/api/v10"
           H = {"Authorization": BOT}
 
-          # Join thread if needed (safe no-op if already joined)
+          # Join thread if needed (no-op if already in)
           r = requests.get(f"{base}/channels/{THREAD_ID}/thread-members/@me", headers=H, timeout=15)
           if r.status_code != 200:
               requests.put(f"{base}/channels/{THREAD_ID}/thread-members/@me", headers=H, timeout=15)
 
-          # Get the message so we preserve existing fields
+          # Fetch message so we preserve all other fields
           m = requests.get(f"{base}/channels/{THREAD_ID}/messages/{MESSAGE_ID}", headers=H, timeout=15)
           m.raise_for_status()
           msg = m.json()
 
           embeds = msg.get("embeds") or [{}]
-          e0 = dict(embeds[0])  # keep title/url/description/footer/etc.
+          e0 = dict(embeds[0])
           e0["image"] = {"url": IMG}
-          new_embeds = [e0] + embeds[1:]  # if there were multiple embeds
+          new_embeds = [e0] + embeds[1:]
 
-          # Keep any existing attachments (if present)
+          # Keep any existing attachments
           old_atts = [{"id": str(a["id"]), "filename": a["filename"]} for a in msg.get("attachments", [])]
           payload = {"embeds": new_embeds}
           if old_atts:
