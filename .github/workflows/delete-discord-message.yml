@@ -7,7 +7,7 @@ on:
         description: "Discord message ID to delete"
         required: true
       channel_id:
-        description: "Channel/Thread ID (leave blank to use TDLBKGC thread secret)"
+        description: "Channel/Thread ID (leave blank to use TDLBKGC_THREAD_ID secret)"
         required: false
         default: ""
 
@@ -16,37 +16,54 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-      CHANNEL_ID: ${{ inputs.channel_id || secrets.TDLBKGC_THREAD_ID }}
+      INPUT_CHANNEL_ID: ${{ inputs.channel_id }}
+      SECRET_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
       MESSAGE_ID: ${{ inputs.message_id }}
     steps:
-      - name: Delete message via Discord API
+      - name: Resolve CHANNEL_ID
+        id: resolve
         run: |
           set -euo pipefail
-          if [ -z "${DISCORD_BOT_TOKEN}" ]; then
-            echo "Missing DISCORD_BOT_TOKEN secret"; exit 1
-          fi
-          if [ -z "${CHANNEL_ID}" ]; then
-            echo "Missing channel/thread id (CHANNEL_ID)"; exit 1
-          fi
-          if [ -z "${MESSAGE_ID}" ]; then
-            echo "Missing message id (MESSAGE_ID)"; exit 1
+          CHANNEL_ID="${INPUT_CHANNEL_ID}"
+          if [ -z "$CHANNEL_ID" ]; then
+            CHANNEL_ID="${SECRET_THREAD_ID}"
           fi
 
-          # Discord returns 204 on success
-          code=$(curl -sS -X DELETE \
+          # Basic validation (only digits)
+          if ! printf '%s' "$CHANNEL_ID" | grep -Eq '^[0-9]{15,}$'; then
+            echo "Bad CHANNEL_ID: '$CHANNEL_ID' (must be a numeric Snowflake, thread/channel ID)"
+            exit 1
+          fi
+          if ! printf '%s' "$MESSAGE_ID" | grep -Eq '^[0-9]{15,}$'; then
+            echo "Bad MESSAGE_ID: '$MESSAGE_ID' (must be a numeric Snowflake)"
+            exit 1
+          fi
+
+          echo "channel_id=$CHANNEL_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Delete message via Discord API
+        env:
+          CHANNEL_ID: ${{ steps.resolve.outputs.channel_id }}
+        run: |
+          set -euo pipefail
+
+          # Call API and capture body + status for debugging
+          STATUS=$(curl -sS -X DELETE \
             -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" \
-            -o /dev/null -w "%{http_code}")
+            -o body.json -w "%{http_code}" \
+            "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}")
 
-          if [ "$code" = "204" ]; then
-            echo "🗑️ Deleted message ${MESSAGE_ID} in ${CHANNEL_ID}"
-          elif [ "$code" = "404" ]; then
-            echo "❓ Not found or already deleted (404)"
-          elif [ "$code" = "403" ]; then
-            echo "⛔ Forbidden (403) — bot lacks permission (needs Manage Messages if it didn’t author the message)"
-            exit 1
-          else
-            echo "⚠️ Discord API returned HTTP $code"
-            exit 1
+          echo "HTTP $STATUS"
+          if [ "$STATUS" != "204" ]; then
+            echo "Response body:"
+            cat body.json || true
           fi
+
+          case "$STATUS" in
+            204) echo "🗑️ Deleted message ${MESSAGE_ID} in ${CHANNEL_ID}";;
+            400) echo "❌ 400 Bad Request — check you used the *thread* ID, not the parent channel ID, and IDs are numeric." ; exit 1;;
+            403) echo "⛔ 403 Forbidden — bot lacks permission (needs Manage Messages if it didn’t author the message)." ; exit 1;;
+            404) echo "❓ 404 Not Found — wrong channel/thread or message already gone." ; exit 1;;
+            *)   echo "⚠️ Unexpected HTTP $STATUS"; exit 1;;
+          esac
