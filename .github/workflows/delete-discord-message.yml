@@ -1,0 +1,52 @@
+name: Delete Discord Message
+
+on:
+  workflow_dispatch:
+    inputs:
+      message_id:
+        description: "Discord message ID to delete"
+        required: true
+      channel_id:
+        description: "Channel/Thread ID (leave blank to use TDLBKG C thread secret)"
+        required: false
+        default: ""
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    env:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      CHANNEL_ID: ${{ inputs.channel_id || secrets.TDLB KGC_THREAD_ID }}
+      MESSAGE_ID: ${{ 1436190221485080637 }}
+    steps:
+      - name: Delete message via Discord API
+        run: |
+          set -euo pipefail
+          if [ -z "${DISCORD_BOT_TOKEN}" ]; then
+            echo "Missing DISCORD_BOT_TOKEN secret"; exit 1
+          fi
+          if [ -z "${CHANNEL_ID}" ]; then
+            echo "Missing channel/thread id (CHANNEL_ID)"; exit 1
+          fi
+          if [ -z "${MESSAGE_ID}" ]; then
+            echo "Missing message id (MESSAGE_ID)"; exit 1
+          fi
+
+          # Discord returns 204 on success
+          code=$(curl -sS -X DELETE \
+            -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}" \
+            -o /dev/null -w "%{http_code}")
+
+          if [ "$code" = "204" ]; then
+            echo "🗑️ Deleted message ${MESSAGE_ID} in ${CHANNEL_ID}"
+          elif [ "$code" = "404" ]; then
+            echo "❓ Not found or already deleted (404)"
+          elif [ "$code" = "403" ]; then
+            echo "⛔ Forbidden (403) — bot lacks permission (needs Manage Messages if it didn’t author the message)"
+            exit 1
+          else
+            echo "⚠️ Discord API returned HTTP $code"
+            exit 1
+          fi
