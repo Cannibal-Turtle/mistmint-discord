@@ -7,7 +7,7 @@ on:
         description: "Discord message ID to delete"
         required: true
       channel_id:
-        description: "Channel/Thread ID (leave blank to use TDLBKG C thread secret)"
+        description: "Channel/Thread ID (leave blank to use TDLBKGC thread secret)"
         required: false
         default: ""
 
