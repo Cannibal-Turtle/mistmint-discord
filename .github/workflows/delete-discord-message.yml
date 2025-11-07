@@ -17,7 +17,7 @@ jobs:
     env:
       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
       CHANNEL_ID: ${{ inputs.channel_id || secrets.TDLBKGC_THREAD_ID }}
-      MESSAGE_ID: ${{ 1436190221485080637 }}
+      MESSAGE_ID: ${{ inputs.message_id }}
     steps:
       - name: Delete message via Discord API
         run: |
