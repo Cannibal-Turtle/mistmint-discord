@@ -18,7 +18,7 @@ FEED_KEY   = "free_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
 HOST_NAME_TARGET = "Mistmint Haven"
 
-GLOBAL_MENTION  = "@everyone"   # always-mention
+
 # ───────────────────────────────────────────────────────────────────────────────
 
 def load_state():
@@ -187,7 +187,7 @@ async def send_new_entries():
             # Content
             title = _norm(entry.get("title"))
             content = (
-                f"<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {GLOBAL_MENTION}\n"
+                f"<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293>\n"
                 f"<a:5037sweetpianoyay:1368138418487427102> **{title}** <:pink_unlock:1368266307824255026>"
             )
 
