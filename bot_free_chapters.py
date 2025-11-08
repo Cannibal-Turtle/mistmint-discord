@@ -6,7 +6,7 @@ from datetime import timezone
 from dateutil import parser as dateparser
 
 import discord
-from discord import Embed
+from discord import Embed, AllowedMentions
 from discord.ui import View, Button
 
 from novel_mappings import HOSTING_SITE_DATA  # ← used for fallback short_code
@@ -184,21 +184,6 @@ async def send_new_entries():
                 print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
                 continue
 
-            # ── DEBUG: show what's going into the message ─────────────────────────
-            print("DEBUG GLOBAL_MENTION:", repr(GLOBAL_MENTION))
-            
-            title_raw       = _norm(entry.get("title"))
-            chaptername_raw = _norm(entry.get("chaptername"))
-            nameextend_raw  = _norm(entry.get("nameextend"))
-            
-            print("DEBUG title:",       repr(title_raw))
-            print("DEBUG chaptername:", repr(chaptername_raw))
-            print("DEBUG nameextend:",  repr(nameextend_raw))
-            
-            # Optional: warn if any field contains @everyone/@here
-            if any(re.search(r'@(?:everyone|here)\b', x or '') for x in (title_raw, chaptername_raw, nameextend_raw)):
-                print("⚠️ DEBUG: a field contains @everyone/@here")
-
             # Content
             title = _norm(entry.get("title"))
             content = (
@@ -233,7 +218,9 @@ async def send_new_entries():
 
             view = View()
             view.add_item(Button(label="Read here", url=link))
-            await dest.send(content=content, embed=embed, view=view)
+            
+            allowed = AllowedMentions(everyone=False, users=False, roles=True)
+            await dest.send(content=content, embed=embed, view=view, allowed_mentions=allowed)
 
             print(f"📨 Sent: {chaptername} / {guid} → thread {thread_id}")
             new_last = guid
