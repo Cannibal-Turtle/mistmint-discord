@@ -38,7 +38,7 @@ HOST_TARGET   = "Mistmint Haven"          # only post Mistmint comments
 USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
 
 # Hardcoded user to ping (your Discord USER id, not a role)
-PING_USER_ID  = "603578473814032414"
+PING_USER_ID = os.getenv("PING_USER_ID", "603578473814032414").strip()
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -234,7 +234,7 @@ def main():
             embed["description"] = reply_chain
 
         # Build content; only add the " || " if we actually have a mention
-        user_mention = f"<@{PING_USER_ID}>" if PING_USER_ID else ""
+        user_mention = f"||<@{PING_USER_ID}>||" if PING_USER_ID else ""
         content = f"<a:7977heartslike:1368146209981857792> New comment for **{novel_title}**"
         if user_mention:
             content += f" || {user_mention}"
