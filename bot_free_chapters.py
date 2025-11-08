@@ -18,7 +18,7 @@ FEED_KEY   = "free_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
 HOST_NAME_TARGET = "Mistmint Haven"
 
-
+GLOBAL_MENTION = "||@everyone||"
 # ───────────────────────────────────────────────────────────────────────────────
 
 def load_state():
