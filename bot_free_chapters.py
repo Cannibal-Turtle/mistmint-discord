@@ -218,8 +218,7 @@ async def send_new_entries():
 
             view = View()
             view.add_item(Button(label="Read here", url=link))
-            
-            allowed = AllowedMentions(everyone=False, users=False, roles=True)
+            allowed = AllowedMentions(everyone=True, users=True, roles=True)
             await dest.send(content=content, embed=embed, view=view, allowed_mentions=allowed)
 
             print(f"📨 Sent: {chaptername} / {guid} → thread {thread_id}")
