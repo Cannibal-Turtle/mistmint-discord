@@ -197,8 +197,15 @@ async def send_new_entries():
             link        = _norm(entry.get("link"))
             translator  = _norm(entry.get("translator"))
             host        = _norm(entry.get("host"))
-            thumb_url   = (entry.get("featuredImage") or entry.get("featuredimage") or {}).get("url")
-            host_logo   = (entry.get("hostLogo") or entry.get("hostlogo") or {}).get("url")
+            thumb_url = (
+                entry.get("featuredimage_url")
+                or (entry.get("media_thumbnail") or [{}])[0].get("url")
+            )
+            
+            host_logo = (
+                entry.get("hostlogo_url")
+                or (entry.get("media_logo") or [{}])[0].get("url")
+            )
             pub_raw     = getattr(entry, "published", None)
             ts          = dateparser.parse(pub_raw) if pub_raw else None
             if ts and ts.tzinfo is None:
