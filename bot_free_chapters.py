@@ -19,6 +19,7 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/fr
 HOST_NAME_TARGET = "Mistmint Haven"
 
 GLOBAL_MENTION = "||@everyone||"
+NSFW_ROLE      = "<@&1402533039497805894>"
 # ───────────────────────────────────────────────────────────────────────────────
 
 def load_state():
@@ -33,9 +34,6 @@ def load_state():
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
-
-_norm  = lambda s: (s or "").strip()
-_guid  = lambda e: _norm(e.get("guid") or e.get("id")) or None
 
 def _is_mistmint(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
@@ -139,6 +137,28 @@ async def ensure_thread_ready(thread_or_channel) -> bool:
         return True
     return True
 
+def _norm(s): 
+    return (s or "").strip()
+
+_guid = lambda e: _norm(e.get("guid") or e.get("id")) or None
+
+def _is_nsfw(entry) -> bool:
+    # Your feed writes a single <category>SFW|NSFW</category>
+    cat = _norm(entry.get("category") or entry.get("Category"))
+    return cat.upper() == "NSFW"
+
+def _join_mentions(*parts: str) -> str:
+    """Join mentions with ' | ' and dedupe while preserving order."""
+    seen, out = set(), []
+    for p in parts:
+        p = _norm(p)
+        if not p:
+            continue
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return " | ".join(out)
+
 async def send_new_entries():
     state = load_state()
     last  = state.get(FEED_KEY)
@@ -184,10 +204,13 @@ async def send_new_entries():
                 print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
                 continue
 
+            nsfw_tail   = NSFW_ROLE if _is_nsfw(entry) else None
+            mention_str = _join_mentions(GLOBAL_MENTION, nsfw_tail)
+
             # Content
             title = _norm(entry.get("title"))
             content = (
-                f"<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {GLOBAL_MENTION}\n"
+                f"<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {mention_str}\n"
                 f"<a:5037sweetpianoyay:1368138418487427102> **{title}** <:pink_unlock:1368266307824255026>"
             )
 
