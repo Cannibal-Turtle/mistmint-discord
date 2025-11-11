@@ -21,6 +21,7 @@ FEED_KEY   = "paid_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
+NSFW_ROLE        = "<@&1402533039497805894>"
 # ───────────────────────────────────────────────────────────────────────────────
 
 AUTO_ARCHIVE_ALLOWED = {60, 1440, 4320, 10080}
@@ -161,6 +162,10 @@ def _is_mistmint(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
     return host.lower() == HOST_NAME_TARGET.lower()
 
+def _is_nsfw(entry) -> bool:
+    cat = (entry.get("category") or entry.get("Category") or "").strip().upper()
+    return cat == "NSFW"
+
 def _short_code(e):
     for k in ("short_code", "shortcode", "shortCode", "short"):
         v = e.get(k)
@@ -277,10 +282,11 @@ async def send_new_paid_entries():
                 print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
                 continue
 
-            # ── Build content (no role/global mentions)
-            title_text  = _norm(entry.get("title"))
+            # ── Build content (append NSFW role if category == NSFW)
+            title_text = _norm(entry.get("title"))
+            nsfw_tail  = NSFW_ROLE if _is_nsfw(entry) else ""
             content = (
-                "<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293>\n"
+                f"<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {nsfw_tail}\n"
                 f"<a:1366_sweetpiano_happy:1368136820965249034> **{title_text}** <:pink_lock:1368266294855733291>"
             )
 
