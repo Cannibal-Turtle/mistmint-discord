@@ -1,10 +1,10 @@
-name: Delete Discord Message
+name: Delete Discord Messages
 
 on:
   workflow_dispatch:
     inputs:
-      message_id:
-        description: "Discord message ID to delete"
+      message_ids:
+        description: "Comma-separated Discord message IDs to delete (e.g. 111,222,333)"
         required: true
       channel_id:
         description: "Channel/Thread ID (leave blank to use TDLBKGC_THREAD_ID secret)"
@@ -18,52 +18,70 @@ jobs:
       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
       INPUT_CHANNEL_ID: ${{ inputs.channel_id }}
       SECRET_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
-      MESSAGE_ID: ${{ inputs.message_id }}
+      MESSAGE_IDS: ${{ inputs.message_ids }}
+
     steps:
       - name: Resolve CHANNEL_ID
         id: resolve
         run: |
           set -euo pipefail
+
           CHANNEL_ID="${INPUT_CHANNEL_ID}"
           if [ -z "$CHANNEL_ID" ]; then
             CHANNEL_ID="${SECRET_THREAD_ID}"
           fi
 
           # Basic validation (only digits)
-          if ! printf '%s' "$CHANNEL_ID" | grep -Eq '^[0-9]{15,}$'; then
+          if ! printf '%s\n' "$CHANNEL_ID" | grep -Eq '^[0-9]{15,}$'; then
             echo "Bad CHANNEL_ID: '$CHANNEL_ID' (must be a numeric Snowflake, thread/channel ID)"
-            exit 1
-          fi
-          if ! printf '%s' "$MESSAGE_ID" | grep -Eq '^[0-9]{15,}$'; then
-            echo "Bad MESSAGE_ID: '$MESSAGE_ID' (must be a numeric Snowflake)"
             exit 1
           fi
 
           echo "channel_id=$CHANNEL_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Delete message via Discord API
+      - name: Delete messages via Discord API
         env:
           CHANNEL_ID: ${{ steps.resolve.outputs.channel_id }}
         run: |
           set -euo pipefail
 
-          # Call API and capture body + status for debugging
-          STATUS=$(curl -sS -X DELETE \
-            -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -o body.json -w "%{http_code}" \
-            "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${MESSAGE_ID}")
+          # Split comma-separated IDs into an array
+          IFS=',' read -ra IDS <<< "$MESSAGE_IDS"
 
-          echo "HTTP $STATUS"
-          if [ "$STATUS" != "204" ]; then
-            echo "Response body:"
-            cat body.json || true
+          if [ "${#IDS[@]}" -eq 0 ]; then
+            echo "No message IDs provided."
+            exit 1
           fi
 
-          case "$STATUS" in
-            204) echo "🗑️ Deleted message ${MESSAGE_ID} in ${CHANNEL_ID}";;
-            400) echo "❌ 400 Bad Request — check you used the *thread* ID, not the parent channel ID, and IDs are numeric." ; exit 1;;
-            403) echo "⛔ 403 Forbidden — bot lacks permission (needs Manage Messages if it didn’t author the message)." ; exit 1;;
-            404) echo "❓ 404 Not Found — wrong channel/thread or message already gone." ; exit 1;;
-            *)   echo "⚠️ Unexpected HTTP $STATUS"; exit 1;;
-          esac
+          for RAW_ID in "${IDS[@]}"; do
+            ID="$(echo "$RAW_ID" | xargs)"  # trim spaces
+
+            if ! printf '%s\n' "$ID" | grep -Eq '^[0-9]{15,}$'; then
+              echo "Skipping bad MESSAGE_ID: '$ID' (must be numeric Snowflake)"
+              continue
+            fi
+
+            echo "→ Deleting message ID $ID in channel/thread $CHANNEL_ID"
+
+            STATUS=$(curl -sS -X DELETE \
+              -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -o body.json -w "%{http_code}" \
+              "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/${ID}")
+
+            echo "HTTP $STATUS for $ID"
+            if [ "$STATUS" != "204" ]; then
+              echo "Response body:"
+              cat body.json || true
+            fi
+
+            case "$STATUS" in
+              204) echo "🗑️ Deleted message ${ID} in ${CHANNEL_ID}";;
+              400) echo "❌ 400 Bad Request for ${ID} — check this is the *thread* ID, not parent, and IDs are numeric." ;;
+              403) echo "⛔ 403 Forbidden for ${ID} — bot lacks permission (needs Manage Messages if it didn’t author the message)." ;;
+              404) echo "❓ 404 Not Found for ${ID} — wrong channel/thread or message already gone." ;;
+              *)   echo "⚠️ Unexpected HTTP $STATUS for ${ID}";;
+            esac
+
+            echo "----"
+          done
