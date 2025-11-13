@@ -1,0 +1,57 @@
+name: Edit Discord Message
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  edit_message:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install deps
+        run: pip install discord.py
+
+      - name: Edit the message
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CHANNEL_ID: "1434025746468311050"
+          MESSAGE_ID: "1438447486300848189"
+        run: |
+          python3 <<EOF
+          import os, discord, asyncio
+
+          TOKEN = os.environ["DISCORD_BOT_TOKEN"]
+          CHANNEL_ID = int(os.environ["CHANNEL_ID"])
+          MESSAGE_ID = int(os.environ["MESSAGE_ID"])
+
+          async def main():
+              intents = discord.Intents.default()
+              bot = discord.Client(intents=intents)
+
+              @bot.event
+              async def on_ready():
+                  channel = await bot.fetch_channel(CHANNEL_ID)
+                  msg = await channel.fetch_message(MESSAGE_ID)
+
+                  # REMOVE NSFW ROLE
+                  original = msg.content
+                  cleaned = original.replace("<@&1402533039497805894>", "").strip()
+
+                  await msg.edit(content=cleaned)
+                  print("✔ Edited message successfully.")
+                  await bot.close()
+
+              await bot.start(TOKEN)
+
+          asyncio.run(main())
+          EOF
