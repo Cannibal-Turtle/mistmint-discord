@@ -3,20 +3,16 @@ name: Edit Discord Message
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   edit_message:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.12"
 
       - name: Install deps
         run: pip install discord.py
@@ -36,17 +32,16 @@ jobs:
 
           async def main():
               intents = discord.Intents.default()
+              intents.guilds = True
               bot = discord.Client(intents=intents)
 
               @bot.event
               async def on_ready():
+                  print("Connected!")
                   channel = await bot.fetch_channel(CHANNEL_ID)
                   msg = await channel.fetch_message(MESSAGE_ID)
 
-                  # REMOVE NSFW ROLE
-                  original = msg.content
-                  cleaned = original.replace("<@&1402533039497805894>", "").strip()
-
+                  cleaned = msg.content.replace("<@&1402533039497805894>", "").strip()
                   await msg.edit(content=cleaned)
                   print("✔ Edited message successfully.")
                   await bot.close()
