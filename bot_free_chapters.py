@@ -19,7 +19,6 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/fr
 HOST_NAME_TARGET = "Mistmint Haven"
 
 GLOBAL_MENTION = "||@everyone||"
-NSFW_ROLE      = "<@&1402533039497805894>"
 # ───────────────────────────────────────────────────────────────────────────────
 
 def load_state():
@@ -142,11 +141,6 @@ def _norm(s):
 
 _guid = lambda e: _norm(e.get("guid") or e.get("id")) or None
 
-def _is_nsfw(entry) -> bool:
-    # Your feed writes a single <category>SFW|NSFW</category>
-    cat = _norm(entry.get("category") or entry.get("Category"))
-    return cat.upper() == "NSFW"
-
 def _join_mentions(*parts: str) -> str:
     """Join mentions with ' | ' and dedupe while preserving order."""
     seen, out = set(), []
@@ -204,13 +198,10 @@ async def send_new_entries():
                 print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
                 continue
 
-            nsfw_tail   = NSFW_ROLE if _is_nsfw(entry) else None
-            mention_str = _join_mentions(GLOBAL_MENTION, nsfw_tail)
-
             # Content
             title = _norm(entry.get("title"))
             content = (
-                f"<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {mention_str}\n"
+                f"<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {GLOBAL_MENTION}\n"
                 f"<a:5037sweetpianoyay:1368138418487427102> **{title}** <:pink_unlock:1368266307824255026>"
             )
 
