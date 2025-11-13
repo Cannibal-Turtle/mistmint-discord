@@ -286,7 +286,7 @@ async def send_new_paid_entries():
             title_text = _norm(entry.get("title"))
             nsfw_tail  = NSFW_ROLE if _is_nsfw(entry) else ""
             content = (
-                f"<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {nsfw_tail}\n"
+                f"<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293>\n"
                 f"<a:1366_sweetpiano_happy:1368136820965249034> **{title_text}** <:pink_lock:1368266294855733291>"
             )
 
