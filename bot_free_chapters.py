@@ -15,7 +15,7 @@ from novel_mappings import HOSTING_SITE_DATA  # ← used for fallback short_code
 TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "state_rss.json"
 FEED_KEY   = "free_last_guid"
-RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
+RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed_C1.xml"
 HOST_NAME_TARGET = "Mistmint Haven"
 
 GLOBAL_MENTION = "||@everyone||"
