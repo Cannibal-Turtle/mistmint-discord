@@ -18,7 +18,7 @@ from novel_mappings import HOSTING_SITE_DATA
 TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "state_rss.json"
 FEED_KEY   = "paid_last_guid"
-RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed_C1.xml"
+RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 NSFW_ROLE        = "<@&1402533039497805894>"
