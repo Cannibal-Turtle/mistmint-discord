@@ -6,11 +6,12 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+
     steps:
       - name: Set up Python
-      - uses: actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install deps
         run: pip install discord.py
@@ -35,12 +36,12 @@ jobs:
               async def on_ready():
                   print("Connected as", bot.user)
 
+                  # Fetch thread
                   thread = await bot.fetch_channel(THREAD_ID)
 
-                  # 1. Check permissions
+                  # Check permissions
                   guild = thread.guild
                   me = guild.get_member(bot.user.id)
-
                   perms = thread.permissions_for(me)
                   print("Permissions:", perms)
 
