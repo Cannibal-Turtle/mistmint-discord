@@ -1,0 +1,69 @@
+name: Cleanup Thread Members
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install discord.py
+
+      - name: Cleanup thread
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          THREAD_ID: "1434025746468311050"   # change to your forum post thread ID
+        run: |
+          python3 <<EOF
+          import os, discord, asyncio
+
+          TOKEN = os.environ["DISCORD_BOT_TOKEN"]
+          THREAD_ID = int(os.environ["THREAD_ID"])
+
+          async def main():
+              intents = discord.Intents.default()
+              intents.guilds = True
+              bot = discord.Client(intents=intents)
+
+              @bot.event
+              async def on_ready():
+                  print("Connected as", bot.user)
+
+                  thread = await bot.fetch_channel(THREAD_ID)
+
+                  # 1. Check permissions
+                  guild = thread.guild
+                  me = guild.get_member(bot.user.id)
+
+                  perms = thread.permissions_for(me)
+                  print("Permissions:", perms)
+
+                  if not perms.manage_threads:
+                      print("❌ Bot does NOT have Manage Threads. Cannot remove users.")
+                      await bot.close()
+                      return
+
+                  print("✔ Bot HAS Manage Threads. Attempting removal…")
+
+                  count = 0
+                  for member in list(thread.members):
+                      try:
+                          await thread.remove_user(member)
+                          print("Removed:", member)
+                          count += 1
+                      except Exception as e:
+                          print("Failed to remove", member, "→", e)
+
+                  print(f"✔ Done. Removed {count} users.")
+                  await bot.close()
+
+              await bot.start(TOKEN)
+
+          asyncio.run(main())
+          EOF
