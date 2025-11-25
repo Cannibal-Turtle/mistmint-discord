@@ -434,7 +434,11 @@ def main():
 
         # Search for the last_chapter marker in feed entries
         for entry in feed.entries:
-            chap_field = entry.get("chaptername") or entry.get("chapter", "") or ""
+            # Combine chaptername/chapter with nameextend for matching
+            base = entry.get("chaptername") or entry.get("chapter", "") or ""
+            ext  = entry.get("nameextend") or ""
+            chap_field = f"{base} {ext}".strip()
+        
             if last_chap not in chap_field:
                 continue
 
