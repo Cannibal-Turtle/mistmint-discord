@@ -434,13 +434,22 @@ def main():
 
         # Search for the last_chapter marker in feed entries
         for entry in feed.entries:
-            # Combine chaptername/chapter with nameextend for matching
+            # (optional) guard by novel title if using shared feed
+            entry_title = (entry.get("title") or "").strip()
+            if entry_title and entry_title != novel_id:
+                continue
+        
             base = entry.get("chaptername") or entry.get("chapter", "") or ""
             ext  = entry.get("nameextend") or ""
-            chap_field = f"{base} {ext}".strip()
         
-            if last_chap not in chap_field:
+            # 1) use combined string only for matching
+            chap_match = f"{base} {ext}".strip()
+        
+            if last_chap not in chap_match:
                 continue
+        
+            # 2) use a clean title for display (prefer base)
+            chap_display = base or chap_match
 
             # compute a chapter timestamp for duration
             if entry.get("published_parsed"):
@@ -455,15 +464,15 @@ def main():
                 if state.get(novel_id, {}).get("only_free_completion"):
                     print(f"→ skipping {novel_id} (only_free_completion) — already notified")
                     break
-
+            
                 duration = get_duration(novel.get("start_date", ""), chap_date)
-                msg = build_only_free_completion(novel, chap_field, entry.link, duration)
+                msg = build_only_free_completion(novel, chap_display, entry.link, duration)
                 print(f"→ Built message of {len(msg)} characters")
-
+            
                 if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent only-free completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["only_free_completion"] = {
-                        "chapter": chap_field,
+                        "chapter": chap_display,
                         "sent_at": datetime.now().isoformat()
                     }
                     save_state(state)
@@ -471,21 +480,21 @@ def main():
                 else:
                     print(f"→ Not marking {novel_id} as only_free_completion (send failed)")
                 break
-
+            
             # PAID completion
             elif feed_type == "paid":
                 if state.get(novel_id, {}).get("paid_completion"):
                     print(f"→ skipping {novel_id} (paid_completion) — already notified")
                     break
-
+            
                 duration = get_duration(novel.get("start_date", ""), chap_date)
-                msg = build_paid_completion(novel, chap_field, entry.link, duration)
+                msg = build_paid_completion(novel, chap_display, entry.link, duration)
                 print(f"→ Built message of {len(msg)} characters")
-
+            
                 if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent paid-completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["paid_completion"] = {
-                        "chapter": chap_field,
+                        "chapter": chap_display,
                         "sent_at": datetime.now().isoformat()
                     }
                     save_state(state)
@@ -493,20 +502,20 @@ def main():
                 else:
                     print(f"→ Not marking {novel_id} as paid_completion (send failed)")
                 break
-
+            
             # STANDARD FREE completion (series that also had a paid feed)
             elif feed_type == "free":
                 if state.get(novel_id, {}).get("free_completion"):
                     print(f"→ skipping {novel_id} (free_completion) — already notified")
                     break
-
-                msg = build_free_completion(novel, chap_field, entry.link)
+            
+                msg = build_free_completion(novel, chap_display, entry.link)
                 print(f"→ Built message of {len(msg)} characters")
-
+            
                 if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent free-completion announcement for {novel_id} → thread {thread_id}")
                     state.setdefault(novel_id, {})["free_completion"] = {
-                        "chapter": chap_field,
+                        "chapter": chap_display,
                         "sent_at": datetime.now().isoformat()
                     }
                     save_state(state)
