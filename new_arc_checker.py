@@ -439,7 +439,7 @@ def process_arc(novel, thread_id: str):
 
     embed_unlocked = None
     if unlocked_md:
-        embed_unlocked = {"description": unlocked_md, "color": 0xFFF9BF}
+        embed_unlocked = {"description": f"||{unlocked_md}||", "color": 0xFFF9BF}
 
     embed_locked = {"description": f"||{locked_md}||", "color": 0xA87676}
 
