@@ -265,6 +265,17 @@ def process_extras(novel: dict):
     # 1) parse the paid feed up-front
     paid_feed = feedparser.parse(novel["paid_feed"])
 
+    # 🔒 TITLE GUARD — keep only entries that belong to THIS novel
+    novel_title = novel["novel_title"].strip()
+    filtered = []
+    for e in paid_feed.entries:
+        entry_title = (e.get("title") or "").strip()
+        if entry_title and entry_title == novel_title:
+            filtered.append(e)
+
+    paid_feed.entries = filtered
+    print(f"🔐 Title-guarded extras feed for {novel_title}: {len(filtered)} entries kept")
+
     # If paid feed already contains the configured last_chapter, skip extras flow
     last_chap = novel.get("last_chapter", "")
     for e in paid_feed.entries:
