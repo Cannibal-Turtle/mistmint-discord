@@ -112,8 +112,8 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
     }
     payload = {
         "content": content,
-        # No pings needed for Mistmint; keep empty to be safe.
-        "allowed_mentions": {"parse": []},
+        # Ping everyone in thread.
+        "allowed_mentions": {"parse": ["everyone"]},
         # 4 = SUPPRESS_EMBEDS (keeps this as clean text wall)
         "flags": 4
     }
