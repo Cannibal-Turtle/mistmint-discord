@@ -22,6 +22,13 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/pa
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 NSFW_ROLE        = "<@&1402533039497805894>"
+
+THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+try:
+    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
+except json.JSONDecodeError:
+    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    THREAD_ID_MAP = {}
 # ───────────────────────────────────────────────────────────────────────────────
 
 AUTO_ARCHIVE_ALLOWED = {60, 1440, 4320, 10080}
@@ -175,9 +182,20 @@ def _short_code(e):
     return _norm(v) if v else None
 
 def _thread_id_for(short_code):
-    if not short_code: return None
-    env_key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper()) + "_THREAD_ID"
-    val = os.getenv(env_key)
+    if not short_code:
+        return None
+
+    # Normalized key (matches your JSON keys like "TDLBKGC", "TVITPA")
+    key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
+
+    # 1) Try THREAD_ID_MAP (uppercased key or raw short_code)
+    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
+
+    # 2) Fallback to old env style: TDLBKGC_THREAD_ID, TVITPA_THREAD_ID, etc.
+    if not val:
+        env_key = f"{key}_THREAD_ID"
+        val = os.getenv(env_key, "").strip() or None
+
     try:
         return int(val) if val else None
     except ValueError:
@@ -263,7 +281,10 @@ async def send_new_paid_entries():
 
             thread_id = _thread_id_for(short_code)
             if not thread_id:
-                print(f"⚠️ Skip: no {short_code.upper()}_THREAD_ID secret set for guid={guid}")
+                print(
+                    f"⚠️ Skip: no thread id for shortcode '{short_code}' "
+                    f"in THREAD_ID_MAP or env {short_code.upper()}_THREAD_ID (guid={guid})"
+                )
                 continue
 
             # Resolve the destination channel/thread safely
