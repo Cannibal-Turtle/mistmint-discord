@@ -288,6 +288,7 @@ def resolve_thread_id(novel_title: str, details: dict) -> str | None:
 
 # ─── MESSAGE BUILDERS (mentions/footer removed for Mistmint) ───────────────────
 def build_paid_completion(novel, chap_field, chap_link, duration: str):
+    translator  = novel.get("translator", "")
     title       = novel.get("novel_title", "")
     link        = novel.get("novel_link", "")
     host        = novel.get("host", "")
@@ -323,10 +324,13 @@ def build_paid_completion(novel, chap_field, chap_link, duration: str):
         f"*The last chapter, [{chap_text}]({chap_link}), has now been released. "
         f"<a:turtle_hyper:1365223449827737630>\n"
         f"{mid_line}"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
+        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
+        f"-# Check out other translated projects at [{translator}'s library](https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11) "
+        f"and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>"
     )
 
 def build_free_completion(novel, chap_field, chap_link):
+    translator  = novel.get("translator", "")
     title       = novel.get("novel_title", "")
     link        = novel.get("novel_link", "")
     host        = novel.get("host", "")
@@ -347,11 +351,14 @@ def build_free_completion(novel, chap_field, chap_link):
         f"<:green_turtle_heart:1365264636064305203>\n"
         f"Head over to {host} to dive straight in~*"
         f"<a:Heart:1365575427724283944><a:Paws:1365676154865979453>\n"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
+        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
+        f"-# Check out other translated projects at [{translator}'s library](https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11) "
+        f"and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>"
     )
 
 
 def build_only_free_completion(novel, chap_field, chap_link, duration: str):
+    translator  = novel.get("translator", "")
     title       = novel.get("novel_title", "")
     link        = novel.get("novel_link", "")
     host        = novel.get("host", "")
@@ -387,7 +394,9 @@ def build_only_free_completion(novel, chap_field, chap_link, duration: str):
         f"*The last chapter, [{chap_text}]({chap_link}), has now been released. "
         f"<a:turtle_hyper:1365223449827737630>\n"
         f"{mid_line}"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
+        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
+        f"-# Check out other translated projects at [{translator}'s library](https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11) "
+        f"and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>"
     )
 
 
@@ -403,6 +412,10 @@ def load_novels() -> list[dict]:
     for host, host_data in (HOSTING_SITE_DATA or {}).items():
         if host != HOST_NAME_TARGET:
             continue
+
+        # default translator for this host
+        host_translator = host_data.get("translator", "")
+
         for title, details in host_data.get("novels", {}).items():
             last = details.get("last_chapter")
             if not last:
@@ -424,6 +437,8 @@ def load_novels() -> list[dict]:
                 "paid_feed":        paid,
                 "discord_role_url": details.get("discord_role_url", ""),
                 "short_code":       details.get("short_code", ""),  # used for thread env
+                # per-novel override, else host-level default
+                "translator":       details.get("translator", host_translator),
             })
     return novels
 
