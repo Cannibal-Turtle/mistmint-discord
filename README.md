@@ -28,14 +28,16 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
    - THREAD_ID_MAP   ← one single JSON secret for all novels (recommended)
 
    Example value for THREAD_ID_MAP:
+   ```json
    {
      "TDLBKGC": "1438462596381413417",
      "TVITPA": "1444214902322368675"
    }
+   ```
 
    (Legacy fallback `<SHORTCODE>_THREAD_ID` secrets still work but are optional.)
 
-3. Ensure `state.json` exists and is valid JSON:
+4. Ensure `state.json` exists and is valid JSON:
    ```json
    {}
    ```
