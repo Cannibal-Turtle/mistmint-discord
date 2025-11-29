@@ -49,6 +49,13 @@ COMPLETE_ROLE    = "<@&1329502614110474270>"  # kept for future if you ever add 
 
 # Only attempt PATCH /channels/{id} when the bot has Manage Threads
 USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
+
+THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+try:
+    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
+except json.JSONDecodeError:
+    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    THREAD_ID_MAP = {}
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -255,15 +262,23 @@ def thread_env_key_for(short_code: str) -> str:
 
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
     """
-    Find the per-novel thread id from env using the short_code if available,
-    otherwise derive a best-effort key from the title.
+    Find the per-novel thread id using:
+      1) THREAD_ID_MAP JSON (preferred)
+      2) <SHORTCODE>_THREAD_ID env fallback
     """
-    short_code = (details.get("short_code") or "").strip()
-    if not short_code:
-        short_code = sanitize_shortcode_from_title(novel_title)
-    env_key = thread_env_key_for(short_code.upper())
-    val = os.getenv(env_key, "").strip()
-    return val or None
+    # Prefer explicit short_code, else fallback from title
+    short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
+    key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
+
+    # 1) THREAD_ID_MAP JSON (keys like "TDLBKGC", "TVITPA")
+    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
+
+    # 2) Old style env fallback, e.g. TDLBKGC_THREAD_ID
+    if not val:
+        env_key = thread_env_key_for(key)
+        val = os.getenv(env_key, "").strip() or None
+
+    return val
 
 
 # ─── MESSAGE BUILDERS (mentions/footer removed for Mistmint) ───────────────────
@@ -405,7 +420,11 @@ def main():
         # route: per-novel thread id (required; no fallback)
         thread_id = resolve_thread_id(novel_id, novel)
         if not thread_id:
-            print(f"❌ No thread env set for {novel_id}. Define {sanitize_shortcode_from_title(novel_id)}_THREAD_ID.")
+            sc = (novel.get("short_code") or sanitize_shortcode_from_title(novel_id)).upper()
+            print(
+                f"❌ No thread id for {novel_id}. "
+                f"Add \"{sc}\" to THREAD_ID_MAP or define {sc}_THREAD_ID."
+            )
             continue
 
         feed_type = args.feed              # "paid" or "free"
