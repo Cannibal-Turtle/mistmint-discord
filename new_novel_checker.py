@@ -61,6 +61,13 @@ NSFW_ROLE   = "<@&1343352825811439616>"
 # Mistmint server id (to build follow-this-thread URL)
 MISTMINT_GUILD_ID = "1379303379221614702"
 
+THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+try:
+    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
+except json.JSONDecodeError:
+    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    THREAD_ID_MAP = {}
+
 # ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -264,21 +271,38 @@ def build_ping_roles(novel_title: str, extra_ping_roles_value: str) -> str:
 # ─── Mistmint thread helpers (same principle as your other Mistmint scripts) ───
 
 def sanitize_shortcode_from_title(title: str) -> str:
-    up = (title or "").upper()
-    return re.sub(r"[^A-Z0-9]+", "_", up).strip("_")
-
+    """Fallback SHORTCODE from title (A–Z/0–9 only)."""
+    return re.sub(r"[^A-Z0-9]+", "_", (title or "").upper()).strip("_")
+  
 
 def thread_env_key_for(short_code: str) -> str:
     return f"{short_code}_THREAD_ID"
-
+  
 
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
-    short_code = (details.get("short_code") or "").strip()
-    if not short_code:
-        short_code = sanitize_shortcode_from_title(novel_title)
-    env_key = thread_env_key_for(short_code.upper())
-    val = os.getenv(env_key, "").strip()
-    return val or None
+    """
+    Find the per-novel thread id using:
+      1) THREAD_ID_MAP JSON (preferred)
+      2) <SHORTCODE>_THREAD_ID env fallback
+    """
+    # Prefer explicit short_code, else fallback from title
+    short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
+    key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
+
+    # 1) THREAD_ID_MAP JSON (keys like "TDLBKGC", "TVITPA")
+    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
+
+    # 2) Old-style env fallback, e.g. TDLBKGC_THREAD_ID
+    if not val:
+        env_key = thread_env_key_for(key)
+        val = os.getenv(env_key, "").strip() or None
+
+    if not val:
+        print(
+            f"❌ No thread id for {novel_title}. "
+            f"Add \"{key}\" to THREAD_ID_MAP or define {key}_THREAD_ID."
+        )
+    return val
 
 
 def build_thread_url(thread_id: str) -> str:
@@ -397,13 +421,10 @@ def main():
             print(f"→ skipping {novel_title} (launch_free) — already launched")
             continue
 
-        # route to per-novel thread via secret <SHORTCODE>_THREAD_ID
-        # Show the precise expected env var (short_code aware)
-        short_code = (novel.get("short_code") or sanitize_shortcode_from_title(novel_title)).upper()
-        env_key    = thread_env_key_for(short_code)
-        thread_id  = os.getenv(env_key, "").strip()
+        # route to per-novel thread via THREAD_ID_MAP or <SHORTCODE>_THREAD_ID
+        thread_id = resolve_thread_id(novel_title, novel)
         if not thread_id:
-            print(f"❌ No thread secret set for {novel_title}. Define {env_key}.")
+            # resolve_thread_id already printed the helpful hint
             continue
 
         follow_url = build_thread_url(thread_id)
