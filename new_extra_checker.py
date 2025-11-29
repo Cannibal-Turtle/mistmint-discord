@@ -204,15 +204,6 @@ def save_state(state, path=STATE_PATH):
 
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
-def nsfw_detected(feed_entries, novel_title):
-    """Log-only NSFW detector (no pinging in Mistmint)."""
-    for entry in feed_entries:
-        if (novel_title or "").lower() in (entry.get("title") or "").lower() and \
-           "nsfw" in (entry.get("category", "") or "").lower():
-            print(f"⚠️ NSFW detected in entry: {entry.get('title')}")
-            return True
-    return False
-
 def find_released_extras(paid_feed, raw_kw):
     """Find max index released for a given keyword group (extra / side story)."""
     if not raw_kw:
@@ -292,7 +283,7 @@ def process_extras(novel: dict):
 
     # 3) NSFW log (no pings)
     entries = paid_feed.entries
-    is_nsfw = (novel["novel_title"] in get_nsfw_novels()) or nsfw_detected(entries, novel["novel_title"])
+    is_nsfw = (novel["novel_title"] in get_nsfw_novels())
     print(f"🕵️ is_nsfw={is_nsfw} for {novel['novel_title']}")
 
     # 4) see what actually dropped
