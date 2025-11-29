@@ -256,7 +256,7 @@ def main():
 
         # Build content; only add the " || " if we actually have a mention
         user_mention = f"||<@{PING_USER_ID}>||" if PING_USER_ID else ""
-        content = f"<a:7977heartslike:1368146209981857792> New comment for **{novel_title}**"
+        content = f"<a:7977heartslike:1368146209981857792> New comment for **{novel_title}** <a:flowersandpetals:1444260426182295623>"
         if user_mention:
             content += f" || {user_mention}"
 
