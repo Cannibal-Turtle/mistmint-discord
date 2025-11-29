@@ -212,13 +212,6 @@ def deduplicate(lst):
             seen.add(x); out.append(x)
     return out
 
-def nsfw_detected(feed_entries, novel_title):
-    for e in feed_entries:
-        if (novel_title or "").lower() in (e.get("title") or "").lower() and "nsfw" in (e.get("category","") or "").lower():
-            print(f"⚠️ NSFW in entry: {e.get('title')}")
-            return True
-    return False
-
 def extract_arc_title(nameextend):
     clean = (nameextend or "").strip("* ").strip()
     clean = re.sub(r"(?:\s+001|\(1\)|\.\s*1)$", "", clean).strip()
@@ -296,7 +289,6 @@ def process_arc(novel, thread_id: str):
     # 1. NSFW (detected but not pinged)
     is_nsfw = (
         novel["novel_title"] in get_nsfw_novels()
-        or nsfw_detected(free_feed.entries + paid_feed.entries, novel["novel_title"])
     )
     print(f"🕵️ NSFW={is_nsfw}")
 
