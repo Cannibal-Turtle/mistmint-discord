@@ -328,7 +328,7 @@ def build_launch_content(
 
     return (
         # removed: f"{ping_line} <a:Bow:...>\n"
-        "## ꉂ`:fish_cake: ･ﾟ✧ New Series Launch ִֶָ. ..𓂃 ࣪ ִֶָ:wing:་༘࿐<a:1678whalepink:1368136879857205308>\n"
+        "## ꉂ`:fish_cake: ･ﾟ✧ New Series Launch ִֶָ. ..𓂃 ࣪ ִֶָ<a:1678whalepink:1368136879857205308>་༘࿐\n"
         f"***<a:kikilts_bracket:1365693072138174525>[{title}]({novel_url})<a:lalalts_bracket:1365693058905014313>*** — now officially added to cannibal turtle's lineup! <a:1620cupcakepink:1368136855903801404><a:Stars:1365568624466722816> \n\n"
         f"[{chap_display}]({chap_link}), is out on {host}. "
         "Please give lots of love to our new baby and welcome it to the server "
