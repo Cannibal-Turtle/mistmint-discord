@@ -215,12 +215,17 @@ def safe_send_bot(bot_token: str, channel_or_thread_id: str, content: str) -> bo
 def get_duration(start_date_str: str, end_date: datetime) -> str:
     """
     Converts a start date (DD/MM/YYYY) to a human-readable duration vs end_date.
+    Returns "" if no valid start_date_str was provided.
     """
+    if not start_date_str:
+        return ""
+
     try:
-        day, month, year = map(int, (start_date_str or "01/01/2024").split("/"))
+        day, month, year = map(int, start_date_str.split("/"))
         start = datetime(year, month, day)
     except Exception:
-        start = end_date
+        # invalid format → give up on duration entirely
+        return ""
 
     delta = relativedelta(end_date, start)
 
@@ -292,6 +297,23 @@ def build_paid_completion(novel, chap_field, chap_link, duration: str):
 
     chap_text = (chap_field or "").replace("\u00A0", " ")
 
+    if duration:
+        mid_line = (
+            f"After {duration} of updates, {title} is now fully translated with "
+            f"{count}! Thank you for coming on this journey and for your continued "
+            f"support <:turtle_plead:1365223487274352670> You can now visit {host} "
+            f"to binge all advance releases~*<a:Heart:1365575427724283944>"
+            f"<a:Paws:1365676154865979453>\n"
+        )
+    else:
+        mid_line = (
+            f"{title} is now fully translated with {count}! Thank you for coming "
+            f"on this journey and for your continued support "
+            f"<:turtle_plead:1365223487274352670> You can now visit {host} "
+            f"to binge all advance releases~*<a:Heart:1365575427724283944>"
+            f"<a:Paws:1365676154865979453>\n"
+        )
+
     return (
         "## ꧁ᐟᐟ ◌ೄ⟢  Completion Announcement  :blueberries: ˚. ᵎᵎ˖ˎˊ-\n"
         f"{divider_line}\n"
@@ -300,14 +322,9 @@ def build_paid_completion(novel, chap_field, chap_link, duration: str):
         f"<a:cowiggle:1368136766791483472><a:whitesparkles:1365569806966853664>\n\n"
         f"*The last chapter, [{chap_text}]({chap_link}), has now been released. "
         f"<a:turtle_hyper:1365223449827737630>\n"
-        f"After {duration} of updates, {title} is now fully translated with "
-        f"{count}! Thank you for coming on this journey and for your continued "
-        f"support <:turtle_plead:1365223487274352670> You can now visit {host} "
-        f"to binge all advance releases~*<a:Heart:1365575427724283944>"
-        f"<a:Paws:1365676154865979453>\n"
+        f"{mid_line}"
         f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
     )
-
 
 def build_free_completion(novel, chap_field, chap_link):
     title       = novel.get("novel_title", "")
@@ -344,6 +361,23 @@ def build_only_free_completion(novel, chap_field, chap_link, duration: str):
 
     chap_text = (chap_field or "").replace("\u00A0", " ")
 
+    if duration:
+        mid_line = (
+            f"After {duration} of updates, {title} is now fully translated with "
+            f"{count}! Thank you for coming on this journey and for your continued "
+            f"support <:luv_turtle:365263712549736448> You can now visit {host} "
+            f"to binge on all the releases~*<a:Heart:1365575427724283944>"
+            f"<a:Paws:1365676154865979453>\n"
+        )
+    else:
+        mid_line = (
+            f"{title} is now fully translated with {count}! Thank you for coming "
+            f"on this journey and for your continued support "
+            f"<:luv_turtle:365263712549736448> You can now visit {host} "
+            f"to binge on all the releases~*<a:Heart:1365575427724283944>"
+            f"<a:Paws:1365676154865979453>\n"
+        )
+
     return (
         "## ⁺‧ ༻•┈๑☽₊˚ ⌞Completion Announcement⋆ཋྀ ˚₊‧⁺ :kiwi: ∗༉‧₊˚\n"
         f"{divider_line}\n"
@@ -352,11 +386,7 @@ def build_only_free_completion(novel, chap_field, chap_link, duration: str):
         f"<a:cowiggle:1368136766791483472><a:whitesparkles:1365569806966853664>\n\n"
         f"*The last chapter, [{chap_text}]({chap_link}), has now been released. "
         f"<a:turtle_hyper:1365223449827737630>\n"
-        f"After {duration} of updates, {title} is now fully translated with "
-        f"{count}! Thank you for coming on this journey and for your continued "
-        f"support <:luv_turtle:365263712549736448> You can now visit {host} "
-        f"to binge on all the releases~*<a:Heart:1365575427724283944>"
-        f"<a:Paws:1365676154865979453>\n"
+        f"{mid_line}"
         f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}"
     )
 
