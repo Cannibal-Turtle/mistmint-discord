@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-comments_thread_poster.py (mistmint-discord)
+bot_comments.py (mistmint-discord)
 
 Reads aggregated comment RSS and posts each new item into the per-novel thread
 (on Mistmint Haven only). Routing is via SHORTCODE env:
