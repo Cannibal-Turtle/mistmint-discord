@@ -423,7 +423,7 @@ def process_arc(novel, thread_id: str):
 
     # 4. Build messages (no pings, no role-react footer)
     content_header = (
-        "## <a:announcement:1365566215975731274> NEW ARC ALERT "
+        "## <a:announcement:1365566215975731274> ARC REFRESHER"
         "<a:pinksparkles:1365566023201198161>"
         "<a:Butterfly:1365572264774471700>"
         "<a:pinksparkles:1365566023201198161>\n"
