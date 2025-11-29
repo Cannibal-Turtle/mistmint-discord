@@ -37,6 +37,13 @@ NSFW_ROLE_ID  = "<@&1343352825811439616>"  # detected but NOT mentioned
 
 # Only attempt PATCH /channels/{id} if the bot has Manage Threads
 USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
+
+THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+try:
+    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
+except json.JSONDecodeError:
+    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    THREAD_ID_MAP = {}
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -251,15 +258,27 @@ def number_to_emoji(n: int) -> str:
 def sanitize_shortcode_from_title(title: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "_", (title or "").upper()).strip("_")
 
+def thread_env_key_for(short_code: str) -> str:
+    return f"{short_code}_THREAD_ID"
+
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
-    sc = (details.get("short_code") or "").strip()
-    if not sc:
-        sc = sanitize_shortcode_from_title(novel_title)
-    env_key = f"{sc.upper()}_THREAD_ID"
-    val = os.getenv(env_key, "").strip()
+    """
+    Find the per-novel thread id using:
+      1) THREAD_ID_MAP JSON (preferred)
+      2) <SHORTCODE>_THREAD_ID env fallback
+    """
+    # Prefer explicit short_code, else fallback from title
+    short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
+    key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
+
+    # 1) THREAD_ID_MAP JSON (keys like "TDLBKGC", "TVITPA")
+    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
+
+    # 2) Old style env fallback, e.g. TDLBKGC_THREAD_ID
     if not val:
-        print(f"❌ Missing env {env_key} for '{novel_title}'")
-        return None
+        env_key = thread_env_key_for(key)
+        val = os.getenv(env_key, "").strip() or None
+
     return val
 
 
@@ -509,7 +528,11 @@ if __name__ == "__main__":
 
             thread_id = resolve_thread_id(title, d)
             if not thread_id:
-                # env like TDLBKGC_THREAD_ID must be set
+                sc = (d.get("short_code") or sanitize_shortcode_from_title(title)).upper()
+                print(
+                    f"❌ No thread id for {title}. "
+                    f"Add \"{sc}\" to THREAD_ID_MAP or define {sc}_THREAD_ID."
+                )
                 continue
 
             novel = {
