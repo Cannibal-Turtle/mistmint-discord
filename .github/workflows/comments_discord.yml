@@ -60,3 +60,4 @@ jobs:
           else
             git commit -m "ci: update state_rss.json"
             git push origin main
+          fi
