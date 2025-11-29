@@ -11,19 +11,31 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
   - **Extras / Side Stories** (paid feed)
   - **Completion** (paid / free / only‑free)
   - **New Series Launch** (first free/public drop)
-- **Destination**: each novel’s **own Discord thread** via secret `<SHORTCODE>_THREAD_ID`.
+- **Destination**: each novel’s **own Discord thread** via `THREAD_ID_MAP (JSON)` or legacy `<SHORTCODE>_THREAD_ID` fallback
 - **No generic channel posting** for Mistmint (we don’t use `DISCORD_CHANNEL_ID` here except in any legacy jobs you kept).
 
 ---
 
-## One‑time setup
+## One-time setup
 
 1. Invite the bot to Mistmint server with permissions:
-   - *Send Messages*, *Send Messages in Threads*, *Read Message History*.
-2. Add repo secrets (GitHub → Settings → Secrets and variables → Actions → *New repository secret*):
-   - `DISCORD_BOT_TOKEN`
-   - For **each** Mistmint novel: `<SHORTCODE>_THREAD_ID` (see below).
-3. Ensure `state.json` exists and is valid JSON. Start with:
+   - Send Messages
+   - Send Messages in Threads
+   - Read Message History
+
+2. Add repo secrets:
+   - DISCORD_BOT_TOKEN
+   - THREAD_ID_MAP   ← one single JSON secret for all novels (recommended)
+
+   Example value for THREAD_ID_MAP:
+   {
+     "TDLBKGC": "1438462596381413417",
+     "TVITPA": "1444214902322368675"
+   }
+
+   (Legacy fallback `<SHORTCODE>_THREAD_ID` secrets still work but are optional.)
+
+3. Ensure `state.json` exists and is valid JSON:
    ```json
    {}
    ```
@@ -62,19 +74,16 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
      - Server (guild) ID: `1379303379221614702` (fixed for Mistmint)  
      - **Thread ID**: `1433327716937240626`
 
-3. **Add the thread secret**
-   - Determine the **SHORTCODE** to use in secrets:
-     - Prefer the mapping’s `short_code` if present; otherwise we auto‑derive from the title: uppercase + non‑alnum → `_`.  
-       Example: `"The Demon Lord!"` → `THE_DEMON_LORD`
-   - Create a secret:
-     ```
-     <SHORTCODE>_THREAD_ID = <thread id>
-     ```
-     Example: `TDLBKGC_THREAD_ID = 1433327716937240626`
+3. **Add the thread ID to THREAD_ID_MAP (recommended):**
+   - Edit the existing THREAD_ID_MAP secret
+   - Append a new key:
 
-4. **Commit `rss-feed` changes** so Actions can import the updated mapping.
+     "NEWCODE": "123456789012345678"
 
-5. **Run the workflow** (manually or wait for cron). Check logs for success lines or helpful errors.
+4. **Commit rss-feed changes.**
+5. **Run workflow.**
+
+(Do NOT add new YAML env lines when using THREAD_ID_MAP.)
 
 ---
 
@@ -140,8 +149,21 @@ python new_novel_checker.py --feed free
   - Uppercase
   - Replace non‑alphanumeric with `_`
   - Trim `_` on both ends
-- Secret name format: `SHORTCODE_THREAD_ID`  
-  Example: title `"The Demon Lord!"` → `THE_DEMON_LORD_THREAD_ID`
+- THREAD_ID resolution order:
+  - THREAD_ID_MAP["SHORTCODE"]
+  - <SHORTCODE>_THREAD_ID (legacy fallback)
+  - ERROR + skip novel
+    
+---
+
+## Legacy mode (optional)
+
+- If you prefer the old per-novel secrets:
+  - You may keep <SHORTCODE>_THREAD_ID secrets
+  - You must also wire each one into YAML
+  - Scripts will automatically fallback to them if THREAD_ID_MAP has no match
+
+> This mode requires manual YAML updates and is not recommended.
 
 ---
 
@@ -156,18 +178,16 @@ When you add a Mistmint Haven novel, do **two** things:
    - Value: the Discord **thread ID** (numbers only), e.g. `1433327716937240626`
 
 2) **Wire the secret into the workflow env**
-   - Edit `.github/workflows/rss-to-discord.yml`
-   - In the `env:` block of each step that runs a checker, add **one line per novel**:
+   - When using THREAD_ID_MAP you only wire ONE secret in YAML:
+
+env:
+  DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+  THREAD_ID_MAP: ${{ secrets.THREAD_ID_MAP }}
 
      ```yaml
-     env:
-       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-       # existing novels…
-       TDLBKGC_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
-
-       # add new ones as you go:
-       BGM_THREAD_ID: ${{ secrets.BGM_THREAD_ID }}          # example
-       XYZ_THREAD_ID: ${{ secrets.XYZ_THREAD_ID }}          # example
+    env:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      THREAD_ID_MAP: ${{ secrets.THREAD_ID_MAP }}
      ```
 ---
 
