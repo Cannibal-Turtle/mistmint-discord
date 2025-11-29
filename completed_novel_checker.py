@@ -46,6 +46,7 @@ BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
 HOST_NAME_TARGET = "Mistmint Haven"  # Only post for this host
 COMPLETE_ROLE    = "<@&1329502614110474270>"  # kept for future if you ever add it back (not used in messages)
+GLOBAL_MENTION = "||@everyone||"
 
 # Only attempt PATCH /channels/{id} when the bot has Manage Threads
 USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
@@ -316,6 +317,7 @@ def build_paid_completion(novel, chap_field, chap_link, duration: str):
         )
 
     return (
+        f"{GLOBAL_MENTION}\n"
         "## ꧁ᐟᐟ ◌ೄ⟢  Completion Announcement  :blueberries: ˚. ᵎᵎ˖ˎˊ-\n"
         f"{divider_line}\n"
         f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
@@ -341,6 +343,7 @@ def build_free_completion(novel, chap_field, chap_link):
     chap_text = (chap_field or "").replace("\u00A0", " ")
 
     return (
+        f"{GLOBAL_MENTION}\n"
         "## 𐔌  Announcing: Complete Series Unlocked ,, :cherries: — 𝝑𝝔  ꒱\n"
         f"{divider_line}\n"
         f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
@@ -386,6 +389,7 @@ def build_only_free_completion(novel, chap_field, chap_link, duration: str):
         )
 
     return (
+        f"{GLOBAL_MENTION}\n"
         "## ⁺‧ ༻•┈๑☽₊˚ ⌞Completion Announcement⋆ཋྀ ˚₊‧⁺ :kiwi: ∗༉‧₊˚\n"
         f"{divider_line}\n"
         f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
