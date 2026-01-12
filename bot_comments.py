@@ -276,6 +276,7 @@ def main():
             
             state[SEEN_KEY].append(norm)
             state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
+            save_state(state)
 
         except requests.HTTPError as e:
             status = e.response.status_code if e.response else "?"
