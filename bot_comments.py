@@ -32,7 +32,7 @@ from novel_mappings import HOSTING_SITE_DATA
 BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE    = "state_rss.json"
 RSS_URL       = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
-SEEN_KEY      = "mistmint_seen_guids"
+SEEN_KEY      = "comments_seen_guids"
 SEEN_CAP      = 500
 
 HOST_TARGET   = "Mistmint Haven"          # only post Mistmint comments
