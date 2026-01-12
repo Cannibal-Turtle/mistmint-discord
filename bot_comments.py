@@ -31,8 +31,9 @@ from novel_mappings import HOSTING_SITE_DATA
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE    = "state_rss.json"
-FEED_KEY      = "comments_last_guid"
 RSS_URL       = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
+SEEN_KEY      = "mistmint_seen_guids"
+SEEN_CAP      = 500
 
 HOST_TARGET   = "Mistmint Haven"          # only post Mistmint comments
 USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
@@ -52,16 +53,22 @@ except json.JSONDecodeError:
 # ─── STATE ─────────────────────────────────────────────────────────────────────
 def load_state():
     try:
-        return json.load(open(STATE_FILE, encoding="utf-8"))
+        st = json.load(open(STATE_FILE, encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
-        initial = {
+        st = {
             "free_last_guid": None,
             "paid_last_guid": None,
-            "comments_last_guid": None
+            SEEN_KEY: []
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(initial, f, indent=2, ensure_ascii=False)
-        return initial
+            json.dump(st, f, indent=2, ensure_ascii=False)
+        return st
+
+    if SEEN_KEY not in st:
+        st[SEEN_KEY] = []
+        save_state(st)
+
+    return st
 
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
@@ -193,15 +200,12 @@ def main():
     state   = load_state()
     feed    = feedparser.parse(RSS_URL)
     entries = list(reversed(feed.entries))  # oldest → newest
-    guids   = [(e.get("guid") or e.get("id")) for e in entries]
-    last    = state.get(FEED_KEY)
-    to_send = entries[guids.index(last)+1:] if last in guids else entries
+    to_send = entries
 
     if not to_send:
         print("🛑 No new comments to send.")
         return
 
-    new_last = last
     print(f"🔎 Processing {len(to_send)} new comment(s)…")
 
     for entry in to_send:
@@ -209,16 +213,19 @@ def main():
         host        = (entry.get("host") or "").strip()
         novel_title = (entry.get("title") or "").strip()
 
+        norm = f"{host}::{guid}"
+        if norm in state[SEEN_KEY]:
+            print(f"↷ Already sent, skipping {norm}")
+            continue
+
         # Always advance past non-Mistmint items so we don't loop on them.
         if host != HOST_TARGET:
             print(f"↷ Skipping non-Mistmint host: {host}  ({novel_title})")
-            new_last = guid
             continue
 
         # Resolve thread for this novel (SHORTCODE env). If missing, skip and advance.
         thread_id = resolve_thread_id(novel_title)
         if not thread_id:
-            new_last = guid
             continue
 
         author      = entry.get("author") or entry.get("dc_creator", "") or "anonymous"
@@ -255,10 +262,10 @@ def main():
             embed["description"] = reply_chain
 
         # Build content; only add the " || " if we actually have a mention
-        user_mention = f" ||<@{PING_USER_ID}>||" if PING_USER_ID else ""
+        user_mention = f"<@{PING_USER_ID}>" if PING_USER_ID else ""
         content = f"<a:7977heartslike:1368146209981857792> New comment for **{novel_title}** <a:flowersandpetals:1444260426182295623>"
         if user_mention:
-            content += f" || {user_mention}"
+            content += f" ||{user_mention}||"
 
         # Only allow your user mention to ping
         allowed = {"parse": [], "users": [PING_USER_ID]} if PING_USER_ID else {"parse": []}
@@ -266,18 +273,15 @@ def main():
         try:
             post_message(thread_id, content, embed, allowed_mentions=allowed)
             print(f"✅ Sent comment {guid} → thread {thread_id}")
-            new_last = guid
+            
+            state[SEEN_KEY].append(norm)
+            state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
+
         except requests.HTTPError as e:
             status = e.response.status_code if e.response else "?"
             body   = e.response.text if e.response else ""
             print(f"❌ Error {status} for {guid}: {body}")
             # do NOT advance new_last so we retry next run
-
-    # Persist last seen guid (even if we skipped non-Mistmint/untargetable items)
-    if new_last and new_last != last:
-        state[FEED_KEY] = new_last
-        save_state(state)
-        print(f"💾 Updated {STATE_FILE} → {new_last}")
 
 if __name__ == "__main__":
     main()
