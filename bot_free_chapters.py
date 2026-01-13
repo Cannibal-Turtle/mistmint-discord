@@ -246,7 +246,10 @@ async def send_new_entries():
                 timestamp=ts,
                 color=int("FFF9BF", 16),
             )
-            embed.set_author(name=f"{translator}˙ᵕ˙")
+            embed.set_author(
+                name=f"{translator}˙ᵕ˙",
+                url="https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11"
+            )
             if thumb_url:
                 embed.set_thumbnail(url=thumb_url)
             embed.set_footer(text=host, icon_url=host_logo)
