@@ -286,6 +286,7 @@ async def send_new_paid_entries():
             _last  = state.get(FEED_KEY)
             queue_all = entries[_guids.index(_last)+1:] if _last in _guids else entries
             queue = queue_all[:MAX_POSTS_PER_RUN]
+            print(f"📦 queue size: {len(queue)}", flush=True)
     
             new_last = _last
             for entry in queue:
