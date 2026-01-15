@@ -257,144 +257,153 @@ def get_coin_button_parts(host: str, novel_title: str, fallback_price: str, fall
 
 
 async def send_new_paid_entries():
-    state   = load_state()
-    last    = state.get(FEED_KEY)
-    feed    = feedparser.parse(RSS_URL)
-    print(f"📡 Feed parsed, entries: {len(feed.entries)}", flush=True)
-    all_ents = list(reversed(feed.entries))              # oldest → newest
-    entries  = [e for e in all_ents if _is_mistmint(e)]  # Mistmint-only
+    try:
+        state   = load_state()
+        last    = state.get(FEED_KEY)
+        print(f"🧠 loaded state paid_last_guid: {last}", flush=True)
 
-    guids   = [_guid(e) for e in entries]
-    to_send = entries[guids.index(last)+1:] if last in guids else entries
+        feed    = feedparser.parse(RSS_URL)
+        print(f"📡 Feed parsed, entries: {len(feed.entries)}", flush=True)
 
-    if not to_send:
-        print("🛑 No new Mistmint paid chapters—skipping Discord login.")
-        return
-
-    intents = discord.Intents.default()
-    bot = discord.Client(intents=intents)
-
-    @bot.event
-    async def on_ready():
-        _guids = [_guid(e) for e in entries]
-        _last  = state.get(FEED_KEY)
-        queue_all = entries[_guids.index(_last)+1:] if _last in _guids else entries
-        queue = queue_all[:MAX_POSTS_PER_RUN]
-
-        new_last = _last
-        for entry in queue:
-            guid         = _guid(entry)
-            short_code   = find_short_code_for_entry(entry)
-            if not short_code:
-                print(f"⚠️ Skip: no short_code in entry guid={guid}")
-                continue
-
-            thread_id = _thread_id_for(short_code)
-            if not thread_id:
-                print(
-                    f"⚠️ Skip: no thread id for shortcode '{short_code}' "
-                    f"in THREAD_ID_MAP or env {short_code.upper()}_THREAD_ID (guid={guid})"
-                )
-                continue
-
-            # Resolve the destination channel/thread safely
-            try:
-                dest = bot.get_channel(thread_id) or await bot.fetch_channel(thread_id)
-            except (Forbidden, NotFound) as e:
-                print(f"⚠️ Cannot access thread {thread_id}: {e}. Skipping {guid}.")
-                continue
-            except Exception as e:
-                print(f"⚠️ Error fetching thread {thread_id}: {e}. Skipping {guid}.")
-                continue
-
-            # small pause to avoid spiking join/unarchive API calls
-            await asyncio.sleep(1.0)
-
-            # Make sure we can actually post (join + unarchive + set auto-archive if allowed)
-            ok = await ensure_thread_ready(dest)
-            if not ok:
-                print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
-                continue
-
-            # ── Build content (append NSFW role if category == NSFW)
-            title_text = _norm(entry.get("title"))
-            nsfw_tail  = NSFW_ROLE if _is_nsfw(entry) else ""
-            content = (
-                f"<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293>\n"
-                f"<a:1366_sweetpiano_happy:1368136820965249034> **{title_text}** <:pink_lock:1368266294855733291>"
-            )
-
-            # ── Embed
-            novel_title = _norm(entry.get("title"))
-            chaptername = _norm(entry.get("chaptername"))
-            nameextend  = _norm(entry.get("nameextend"))
-            link        = _norm(entry.get("link"))
-            translator  = _norm(entry.get("translator"))
-            host        = _norm(entry.get("host"))
-            thumb_url   = (entry.get("featuredImage") or entry.get("featuredimage") or {}).get("url")
-            host_logo   = (entry.get("hostLogo") or entry.get("hostlogo") or {}).get("url")
-            pub_raw     = getattr(entry, "published", None)
-            timestamp = dateparser.parse(pub_raw) if pub_raw else None
-            if timestamp and timestamp.tzinfo is None:
-                timestamp = timestamp.replace(tzinfo=timezone.utc)
-
-            embed = Embed(
-                title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
-                url=link,
-                description=nameextend or discord.Embed.Empty,
-                timestamp=timestamp,
-                color=int("A87676", 16),  # dusty rose
-            )
-            embed.set_author(
-                name=f"{translator}˙ᵕ˙",
-                url="https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11"
-            )
-            if thumb_url:
-                embed.set_thumbnail(url=thumb_url)
-            embed.set_footer(text=host, icon_url=host_logo)
-
-            # ── Button (coin label/emoji if available)
-            coin_label_raw = _norm(entry.get("coin"))
-            label_text, emoji_obj = get_coin_button_parts(
-                host=host,
-                novel_title=novel_title,
-                fallback_price=coin_label_raw,
-                fallback_emoji=None,
-            )
-            btn = Button(label=label_text or "Read here", url=link, emoji=emoji_obj)
-            view = View()
-            view.add_item(btn)
-
-            # Send with one retry if we hit archived/membership bounce
-            try:
-                await dest.send(content=content, embed=embed, view=view)
-            except HTTPException as e:
-                if isinstance(dest, discord.Thread) and e.status in (400, 403):
-                    if await ensure_thread_ready(dest):
-                        await dest.send(content=content, embed=embed, view=view)
-                    else:
-                        print(f"⚠️ Send retry failed for {thread_id}: {e}")
-                        continue
-                else:
-                    print(f"⚠️ Send failed for {thread_id}: {e}")
+        all_ents = list(reversed(feed.entries))              # oldest → newest
+        entries  = [e for e in all_ents if _is_mistmint(e)]  # Mistmint-only
+    
+        guids   = [_guid(e) for e in entries]
+        to_send = entries[guids.index(last)+1:] if last in guids else entries
+    
+        if not to_send:
+            print("🛑 No new Mistmint paid chapters—skipping Discord login.")
+            return
+    
+        intents = discord.Intents.default()
+        bot = discord.Client(intents=intents)
+    
+        @bot.event
+        async def on_ready():
+            _guids = [_guid(e) for e in entries]
+            _last  = state.get(FEED_KEY)
+            queue_all = entries[_guids.index(_last)+1:] if _last in _guids else entries
+            queue = queue_all[:MAX_POSTS_PER_RUN]
+    
+            new_last = _last
+            for entry in queue:
+                guid         = _guid(entry)
+                short_code   = find_short_code_for_entry(entry)
+                if not short_code:
+                    print(f"⚠️ Skip: no short_code in entry guid={guid}")
                     continue
-                    
-            # throttle after sending to reduce rate-limit risk
-            await asyncio.sleep(1.0)
+    
+                thread_id = _thread_id_for(short_code)
+                if not thread_id:
+                    print(
+                        f"⚠️ Skip: no thread id for shortcode '{short_code}' "
+                        f"in THREAD_ID_MAP or env {short_code.upper()}_THREAD_ID (guid={guid})"
+                    )
+                    continue
+    
+                # Resolve the destination channel/thread safely
+                try:
+                    dest = bot.get_channel(thread_id) or await bot.fetch_channel(thread_id)
+                except (Forbidden, NotFound) as e:
+                    print(f"⚠️ Cannot access thread {thread_id}: {e}. Skipping {guid}.")
+                    continue
+                except Exception as e:
+                    print(f"⚠️ Error fetching thread {thread_id}: {e}. Skipping {guid}.")
+                    continue
+    
+                # small pause to avoid spiking join/unarchive API calls
+                await asyncio.sleep(1.0)
+    
+                # Make sure we can actually post (join + unarchive + set auto-archive if allowed)
+                ok = await ensure_thread_ready(dest)
+                if not ok:
+                    print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
+                    continue
+    
+                # ── Build content (append NSFW role if category == NSFW)
+                title_text = _norm(entry.get("title"))
+                nsfw_tail  = NSFW_ROLE if _is_nsfw(entry) else ""
+                content = (
+                    f"<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293>\n"
+                    f"<a:1366_sweetpiano_happy:1368136820965249034> **{title_text}** <:pink_lock:1368266294855733291>"
+                )
+    
+                # ── Embed
+                novel_title = _norm(entry.get("title"))
+                chaptername = _norm(entry.get("chaptername"))
+                nameextend  = _norm(entry.get("nameextend"))
+                link        = _norm(entry.get("link"))
+                translator  = _norm(entry.get("translator"))
+                host        = _norm(entry.get("host"))
+                thumb_url   = (entry.get("featuredImage") or entry.get("featuredimage") or {}).get("url")
+                host_logo   = (entry.get("hostLogo") or entry.get("hostlogo") or {}).get("url")
+                pub_raw     = getattr(entry, "published", None)
+                timestamp = dateparser.parse(pub_raw) if pub_raw else None
+                if timestamp and timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
+    
+                embed = Embed(
+                    title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
+                    url=link,
+                    description=nameextend or discord.Embed.Empty,
+                    timestamp=timestamp,
+                    color=int("A87676", 16),  # dusty rose
+                )
+                embed.set_author(
+                    name=f"{translator}˙ᵕ˙",
+                    url="https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11"
+                )
+                if thumb_url:
+                    embed.set_thumbnail(url=thumb_url)
+                embed.set_footer(text=host, icon_url=host_logo)
+    
+                # ── Button (coin label/emoji if available)
+                coin_label_raw = _norm(entry.get("coin"))
+                label_text, emoji_obj = get_coin_button_parts(
+                    host=host,
+                    novel_title=novel_title,
+                    fallback_price=coin_label_raw,
+                    fallback_emoji=None,
+                )
+                btn = Button(label=label_text or "Read here", url=link, emoji=emoji_obj)
+                view = View()
+                view.add_item(btn)
+    
+                # Send with one retry if we hit archived/membership bounce
+                try:
+                    await dest.send(content=content, embed=embed, view=view)
+                except HTTPException as e:
+                    if isinstance(dest, discord.Thread) and e.status in (400, 403):
+                        if await ensure_thread_ready(dest):
+                            await dest.send(content=content, embed=embed, view=view)
+                        else:
+                            print(f"⚠️ Send retry failed for {thread_id}: {e}")
+                            continue
+                    else:
+                        print(f"⚠️ Send failed for {thread_id}: {e}")
+                        continue
+                        
+                # throttle after sending to reduce rate-limit risk
+                await asyncio.sleep(1.0)
+    
+                print(f"📨 Sent paid: {chaptername} / {guid} → thread {thread_id}")
+                new_last = guid
+    
+            if new_last and new_last != state.get(FEED_KEY):
+                state[FEED_KEY] = new_last
+                save_state(state)
+                print(f"💾 Updated {STATE_FILE}[\"{FEED_KEY}\"] → {new_last}")
+    
+            await asyncio.sleep(1)
+            await bot.close()
+    
+        await bot.start(TOKEN)
 
-            print(f"📨 Sent paid: {chaptername} / {guid} → thread {thread_id}")
-            new_last = guid
-
-        if new_last and new_last != state.get(FEED_KEY):
-            state[FEED_KEY] = new_last
-            save_state(state)
-            print(f"💾 Updated {STATE_FILE}[\"{FEED_KEY}\"] → {new_last}")
-
-        await asyncio.sleep(1)
-        await bot.close()
-
-    await bot.start(TOKEN)
-
+    except Exception as e:
+        import traceback
+        print("❌ EXCEPTION IN send_new_paid_entries()", flush=True)
+        traceback.print_exc()
+        raise
 
 if __name__ == "__main__":
     asyncio.run(send_new_paid_entries())
