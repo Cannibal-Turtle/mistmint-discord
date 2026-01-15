@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime, timezone
 import feedparser
 from dateutil import parser as dateparser
+import sys
 
 import discord
 from discord import Embed
@@ -264,6 +265,17 @@ async def send_new_paid_entries():
 
     intents = discord.Intents.default()
     bot = discord.Client(intents=intents)
+    
+    async def hard_exit_after(seconds: int):
+        await asyncio.sleep(seconds)
+        print(f"⏱️ Hard exit after {seconds}s to avoid CI hang")
+        try:
+            await bot.close()
+        except Exception:
+            pass
+        sys.exit(0)
+    
+    asyncio.create_task(hard_exit_after(600))  # 10 minutes
 
     @bot.event
     async def on_ready():
