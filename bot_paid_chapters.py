@@ -7,7 +7,6 @@ import asyncio
 from datetime import datetime, timezone
 import feedparser
 from dateutil import parser as dateparser
-import sys
 
 import discord
 from discord import Embed
@@ -274,8 +273,6 @@ async def send_new_paid_entries():
             await bot.close()
         except Exception:
             pass
-        await bot.close()
-        return
     
     asyncio.create_task(hard_exit_after(600))  # 10 minutes
 
