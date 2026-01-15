@@ -1,3 +1,5 @@
+print("🔥 PAID BOT FILE LOADED 🔥", flush=True)
+
 # -*- coding: utf-8 -*-
 from discord.errors import Forbidden, HTTPException, NotFound
 import os
@@ -15,7 +17,9 @@ from discord.ui import View, Button
 from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG (no fallback channel) ──────────────────────────────────────────────
-TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+if not TOKEN:
+    raise RuntimeError("DISCORD_BOT_TOKEN is missing for paid bot")
 STATE_FILE = "state_rss.json"
 FEED_KEY   = "paid_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
