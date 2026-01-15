@@ -253,11 +253,45 @@ async def send_new_paid_entries():
     state   = load_state()
     last    = state.get(FEED_KEY)
     feed    = feedparser.parse(RSS_URL)
+
+    print(f"📡 Feed entries total: {len(feed.entries)}")
+    print("📡 First 3 feed GUIDs (raw order):")
+    for e in feed.entries[:3]:
+        print("   ", _guid(e))
+    
+    print("📡 Last 3 feed GUIDs (raw order):")
+    for e in feed.entries[-3:]:
+        print("   ", _guid(e))
+    
     all_ents = list(reversed(feed.entries))              # oldest → newest
     entries  = [e for e in all_ents if _is_mistmint(e)]  # Mistmint-only
 
+    print(f"🏷️ Mistmint entries after filter: {len(entries)}")
+    print("🏷️ First 3 Mistmint GUIDs:")
+    for e in entries[:3]:
+        print("   ", _guid(e))
+    
+    print("🏷️ Last 3 Mistmint GUIDs:")
+    for e in entries[-3:]:
+        print("   ", _guid(e))
+
     guids   = [_guid(e) for e in entries]
+
+    print(f"🧠 State paid_last_guid: {last}")
+    print(f"🧠 Is paid_last_guid in feed? {last in guids}")
+    
+    if last in guids:
+        idx = guids.index(last)
+        print(f"🧠 paid_last_guid index in entries: {idx}")
+        print(f"🧠 GUID before index: {guids[idx-1] if idx > 0 else 'NONE'}")
+        print(f"🧠 GUID after index: {guids[idx+1] if idx+1 < len(guids) else 'NONE'}")
+    
     to_send = entries[guids.index(last)+1:] if last in guids else entries
+
+    print(f"📦 to_send length: {len(to_send)}")
+    if to_send:
+        print("📦 First to_send GUID:", _guid(to_send[0]))
+        print("📦 Last to_send GUID:", _guid(to_send[-1]))
 
     if not to_send:
         print("🛑 No new Mistmint paid chapters—skipping Discord login.")
