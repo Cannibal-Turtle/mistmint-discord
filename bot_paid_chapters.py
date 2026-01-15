@@ -276,6 +276,7 @@ async def send_new_paid_entries():
             return
     
         intents = discord.Intents.default()
+        intents.guilds = True
         bot = discord.Client(intents=intents)
     
         @bot.event
