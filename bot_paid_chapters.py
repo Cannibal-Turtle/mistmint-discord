@@ -22,6 +22,7 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/pa
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 NSFW_ROLE        = "<@&1402533039497805894>"
+MAX_POSTS_PER_RUN = int(os.getenv("MAX_POSTS_PER_RUN", "10"))
 
 THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
 try:
@@ -269,7 +270,8 @@ async def send_new_paid_entries():
     async def on_ready():
         _guids = [_guid(e) for e in entries]
         _last  = state.get(FEED_KEY)
-        queue  = entries[_guids.index(_last)+1:] if _last in _guids else entries
+        queue_all = entries[_guids.index(_last)+1:] if _last in _guids else entries
+        queue = queue_all[:MAX_POSTS_PER_RUN]
 
         new_last = _last
         for entry in queue:
@@ -367,12 +369,10 @@ async def send_new_paid_entries():
                     continue
 
             print(f"📨 Sent paid: {chaptername} / {guid} → thread {thread_id}")
-            new_last = guid
-
-        if new_last and new_last != state.get(FEED_KEY):
-            state[FEED_KEY] = new_last
+            state[FEED_KEY] = guid
             save_state(state)
-            print(f"💾 Updated {STATE_FILE}[\"{FEED_KEY}\"] → {new_last}")
+            print(f"💾 Checkpoint saved → {guid}")
+            new_last = guid
 
         await asyncio.sleep(1)
         await bot.close()
