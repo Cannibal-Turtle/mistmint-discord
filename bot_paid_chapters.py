@@ -1,6 +1,3 @@
-print("🔥 PAID BOT FILE LOADED 🔥")
-raise SystemExit("🔥 STOP HERE 🔥")
-
 # -*- coding: utf-8 -*-
 from discord.errors import Forbidden, HTTPException, NotFound
 import os
