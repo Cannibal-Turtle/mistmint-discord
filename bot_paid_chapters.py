@@ -268,6 +268,7 @@ async def send_new_paid_entries():
 
     @bot.event
     async def on_ready():
+        print("🟢 Discord on_ready() fired")
         _guids = [_guid(e) for e in entries]
         _last  = state.get(FEED_KEY)
         queue_all = entries[_guids.index(_last)+1:] if _last in _guids else entries
