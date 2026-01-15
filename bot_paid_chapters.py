@@ -277,6 +277,7 @@ async def send_new_paid_entries():
     
         intents = discord.Intents.default()
         intents.guilds = True
+        intents.messages = True
         bot = discord.Client(intents=intents)
     
         @bot.event
@@ -311,7 +312,23 @@ async def send_new_paid_entries():
     
                 # Resolve the destination channel/thread safely
                 try:
-                    dest = bot.get_channel(thread_id) or await bot.fetch_channel(thread_id)
+                    dest = bot.get_channel(thread_id)
+                    
+                    if dest is None:
+                        try:
+                            dest = await bot.fetch_channel(thread_id)
+                        except Forbidden:
+                            print(f"❌ Forbidden fetching channel {thread_id}", flush=True)
+                            continue
+                        except NotFound:
+                            print(f"❌ Channel/thread {thread_id} not found", flush=True)
+                            continue
+                        except Exception as e:
+                            print(f"❌ fetch_channel error {thread_id}: {e}", flush=True)
+                            continue
+                    
+                    print(f"📍 resolved destination: {dest} ({type(dest).__name__})", flush=True)
+
                 except (Forbidden, NotFound) as e:
                     print(f"⚠️ Cannot access thread {thread_id}: {e}. Skipping {guid}.")
                     continue
@@ -406,7 +423,7 @@ async def send_new_paid_entries():
             await bot.close()
     
         try:
-            await asyncio.wait_for(bot.start(TOKEN), timeout=60)
+            await bot.start(TOKEN)
         except asyncio.TimeoutError:
             print("⏱️ Discord gateway connect timed out (60s). Exiting.", flush=True)
             await bot.close()
