@@ -17,9 +17,12 @@ from discord.ui import View, Button
 from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG (no fallback channel) ──────────────────────────────────────────────
+# safe token access + early diagnostic
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+print(f"🔐 DISCORD_BOT_TOKEN present? {bool(TOKEN)}", flush=True)
 if not TOKEN:
-    raise RuntimeError("DISCORD_BOT_TOKEN is missing for paid bot")
+    print("❌ DISCORD_BOT_TOKEN missing. Make sure the workflow step has env: DISCORD_BOT_TOKEN set from secrets.", flush=True)
+    raise SystemExit(1)
 STATE_FILE = "state_rss.json"
 FEED_KEY   = "paid_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
@@ -257,6 +260,7 @@ async def send_new_paid_entries():
     state   = load_state()
     last    = state.get(FEED_KEY)
     feed    = feedparser.parse(RSS_URL)
+    print(f"📡 Feed parsed, entries: {len(feed.entries)}", flush=True)
     all_ents = list(reversed(feed.entries))              # oldest → newest
     entries  = [e for e in all_ents if _is_mistmint(e)]  # Mistmint-only
 
