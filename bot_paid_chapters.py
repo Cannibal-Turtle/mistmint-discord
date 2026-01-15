@@ -281,6 +281,7 @@ async def send_new_paid_entries():
     
         @bot.event
         async def on_ready():
+            print(f"🟢 on_ready fired as {bot.user}", flush=True)
             _guids = [_guid(e) for e in entries]
             _last  = state.get(FEED_KEY)
             queue_all = entries[_guids.index(_last)+1:] if _last in _guids else entries
@@ -398,7 +399,11 @@ async def send_new_paid_entries():
             await asyncio.sleep(1)
             await bot.close()
     
-        await bot.start(TOKEN)
+        try:
+            await asyncio.wait_for(bot.start(TOKEN), timeout=60)
+        except asyncio.TimeoutError:
+            print("⏱️ Discord gateway connect timed out (60s). Exiting.", flush=True)
+            await bot.close()
 
     except Exception as e:
         import traceback
