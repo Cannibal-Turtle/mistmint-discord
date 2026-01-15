@@ -29,7 +29,7 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/pa
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 NSFW_ROLE        = "<@&1402533039497805894>"
-MAX_POSTS_PER_RUN = int(os.getenv("MAX_POSTS_PER_RUN", "10"))
+MAX_POSTS_PER_RUN = int(os.getenv("MAX_POSTS_PER_RUN", "5"))
 
 THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
 try:
@@ -289,10 +289,6 @@ async def send_new_paid_entries():
             queue = queue_all[:MAX_POSTS_PER_RUN]
             
             print(f"📦 queue size before force: {len(queue)}", flush=True)
-            
-            # 🧪 force single send test
-            queue = queue[:1]
-            print("🧪 forcing single send test", flush=True)
     
             new_last = _last
             for entry in queue:
