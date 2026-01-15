@@ -56,7 +56,6 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           THREAD_ID_MAP: ${{ secrets.THREAD_ID_MAP }}
-          MAX_POSTS_PER_RUN: '5'
         run: python bot_paid_chapters.py
 
       - name: Sync & commit state_rss.json
