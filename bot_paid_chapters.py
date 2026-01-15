@@ -252,7 +252,7 @@ def get_coin_button_parts(host: str, novel_title: str, fallback_price: str, fall
 async def send_new_paid_entries():
     state   = load_state()
     last    = state.get(FEED_KEY)
-    feed    = feedparser.parse(RSS_URL)
+    feed    = await asyncio.to_thread(feedparser.parse, RSS_URL)
     all_ents = list(reversed(feed.entries))              # oldest → newest
     entries  = [e for e in all_ents if _is_mistmint(e)]  # Mistmint-only
 
@@ -263,7 +263,8 @@ async def send_new_paid_entries():
         print("🛑 No new Mistmint paid chapters—skipping Discord login.")
         return
 
-    intents = discord.Intents.default()
+    intents = discord.Intents.none()
+    intents.guilds = True
     bot = discord.Client(intents=intents)
     
     async def hard_exit_after(seconds: int):
@@ -273,12 +274,14 @@ async def send_new_paid_entries():
             await bot.close()
         except Exception:
             pass
-        sys.exit(0)
+        await bot.close()
+        return
     
     asyncio.create_task(hard_exit_after(600))  # 10 minutes
 
     @bot.event
     async def on_ready():
+        await asyncio.sleep(2)
         _guids = [_guid(e) for e in entries]
         _last  = state.get(FEED_KEY)
         queue  = entries[_guids.index(_last)+1:] if _last in _guids else entries
