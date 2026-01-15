@@ -249,6 +249,7 @@ def get_coin_button_parts(host: str, novel_title: str, fallback_price: str, fall
 
 
 async def send_new_paid_entries():
+    MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "2"))
     state   = load_state()
     last    = state.get(FEED_KEY)
     feed    = await asyncio.to_thread(feedparser.parse, RSS_URL)
@@ -265,26 +266,23 @@ async def send_new_paid_entries():
     intents = discord.Intents.none()
     intents.guilds = True
     bot = discord.Client(intents=intents)
-    
-    async def hard_exit_after(seconds: int):
-        await asyncio.sleep(seconds)
-        print(f"⏱️ Hard exit after {seconds}s to avoid CI hang")
-        try:
-            await bot.close()
-        except Exception:
-            pass
-    
-    asyncio.create_task(hard_exit_after(600))  # 10 minutes
 
     @bot.event
     async def on_ready():
         await asyncio.sleep(2)
+        
+        sent = 0
+        
         _guids = [_guid(e) for e in entries]
         _last  = state.get(FEED_KEY)
-        queue  = entries[_guids.index(_last)+1:] if _last in _guids else entries
+        queue = to_send
 
         new_last = _last
+        
         for entry in queue:
+            if sent >= MAX_PER_RUN:
+                print(f"🛑 Reached MAX_PER_RUN={MAX_PER_RUN}, stopping")
+                break
             guid         = _guid(entry)
             short_code   = find_short_code_for_entry(entry)
             if not short_code:
@@ -379,6 +377,7 @@ async def send_new_paid_entries():
                     continue
 
             print(f"📨 Sent paid: {chaptername} / {guid} → thread {thread_id}")
+            sent += 1
             new_last = guid
 
         if new_last and new_last != state.get(FEED_KEY):
@@ -389,7 +388,12 @@ async def send_new_paid_entries():
         await asyncio.sleep(1)
         await bot.close()
 
-    await bot.start(TOKEN)
+    print("🔌 Connecting to Discord gateway…")
+    try:
+        await asyncio.wait_for(bot.start(TOKEN), timeout=30)
+    except asyncio.TimeoutError:
+        print("❌ Gateway connect timed out — exiting cleanly")
+        return
 
 
 if __name__ == "__main__":
