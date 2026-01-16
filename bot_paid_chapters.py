@@ -249,7 +249,7 @@ def get_coin_button_parts(host: str, novel_title: str, fallback_price: str, fall
 
 
 async def send_new_paid_entries():
-    MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "2"))
+    MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "10"))
     state   = load_state()
     last    = state.get(FEED_KEY)
     feed    = await asyncio.to_thread(feedparser.parse, RSS_URL)
