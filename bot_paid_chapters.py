@@ -338,10 +338,13 @@ async def send_new_paid_entries():
             embed = Embed(
                 title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
                 url=link,
-                description=nameextend or discord.Embed.Empty,
                 timestamp=timestamp,
-                color=int("A87676", 16),  # dusty rose
+                color=int("A87676", 16),
             )
+            
+            if nameextend:
+                embed.description = nameextend
+
             embed.set_author(
                 name=f"{translator}˙ᵕ˙",
                 url="https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11"
