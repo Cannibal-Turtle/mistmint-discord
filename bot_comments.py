@@ -4,8 +4,8 @@
 bot_comments.py (mistmint-discord)
 
 Reads aggregated comment RSS and posts each new item into the per-novel thread
-(on Mistmint Haven only). Routing is via SHORTCODE env:
-  <SHORTCODE>_THREAD_ID   e.g.,  TDLBKGC_THREAD_ID=1433327...
+(on Mistmint Haven only). Routing:
+  - Thread IDs are resolved from thread_id_map.json using novel short_code.
 
 SHORTCODE comes from HOSTING_SITE_DATA[host].novels[title]['short_code'],
 else derived from the novel title: uppercase and non-alnum -> underscore.
@@ -41,11 +41,16 @@ USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
 # Hardcoded user to ping (your Discord USER id, not a role)
 PING_USER_ID = os.getenv("PING_USER_ID", "603578473814032414").strip()
 
-THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+THREAD_MAP_FILE = "thread_id_map.json"
+
 try:
-    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
-except json.JSONDecodeError:
-    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
+        THREAD_ID_MAP = json.load(f)
+except FileNotFoundError:
+    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
+    THREAD_ID_MAP = {}
+except json.JSONDecodeError as e:
+    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
     THREAD_ID_MAP = {}
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -86,19 +91,13 @@ def resolve_thread_id(novel_title: str) -> str | None:
     # Shortcode from mappings, or derived from title
     sc_raw = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
     sc_key = sc_raw.upper()
-
-    # 1) Try THREAD_ID_MAP first (both uppercased key and raw key, just in case)
+  
     thread_id = (THREAD_ID_MAP.get(sc_key) or THREAD_ID_MAP.get(sc_raw) or "").strip() or None
-
-    # 2) Fallback to old per-env if you still have TDLBKGC_THREAD_ID etc.
-    if not thread_id:
-        env_key = f"{sc_key}_THREAD_ID"
-        thread_id = os.getenv(env_key, "").strip() or None
-
+  
     if not thread_id:
         print(
             f"❌ Missing thread id for shortcode '{sc_key}' (novel='{novel_title}') "
-            f"in THREAD_ID_MAP and env {sc_key}_THREAD_ID"
+            f"in {THREAD_MAP_FILE}"
         )
         return None
 
