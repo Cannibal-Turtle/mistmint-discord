@@ -11,7 +11,7 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
   - **Extras / Side Stories** (paid feed)
   - **Completion** (paid / free / only‑free)
   - **New Series Launch** (first free/public drop)
-- **Destination**: each novel’s **own Discord thread** via `THREAD_ID_MAP (JSON)` or legacy `<SHORTCODE>_THREAD_ID` fallback
+- **Destination**: each novel’s **own Discord thread** via `THREAD_ID_MAP (JSON)`
 - **No generic channel posting** for Mistmint (we don’t use `DISCORD_CHANNEL_ID` here except in any legacy jobs you kept).
 
 ---
@@ -77,7 +77,7 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
      - **Thread ID**: `1433327716937240626`
 
 3. **Add the thread ID to THREAD_ID_MAP (recommended):**
-   - Edit the existing THREAD_ID_MAP secret
+   - Edit the existing `THREAD_ID_MAP.json`
    - Append a new key:
 
      "NEWCODE": "123456789012345678"
@@ -93,9 +93,9 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
 
 | Script                        | Purpose                                      | Needs feed             | Posts to            | Secrets required                                  |
 |------------------------------|----------------------------------------------|------------------------|---------------------|---------------------------------------------------|
-| `new_extra_checker.py`       | **Extras / Side Stories** announcement       | `paid_feed`            | Per‑novel thread    | `DISCORD_BOT_TOKEN`, `<SHORTCODE>_THREAD_ID`      |
-| `completed_novel_checker.py` | **Completion** (paid / free / only‑free)     | `paid_feed` and/or `free_feed` | Per‑novel thread | `DISCORD_BOT_TOKEN`, `<SHORTCODE>_THREAD_ID`      |
-| `new_novel_checker.py`       | **New Series Launch** (first free chapter)   | `free_feed`            | Per‑novel thread    | `DISCORD_BOT_TOKEN`, `<SHORTCODE>_THREAD_ID`      |
+| `new_extra_checker.py`       | **Extras / Side Stories** announcement       | `paid_feed`            | Per‑novel thread    | `DISCORD_BOT_TOKEN`      |
+| `completed_novel_checker.py` | **Completion** (paid / free / only‑free)     | `paid_feed` and/or `free_feed` | Per‑novel thread | `DISCORD_BOT_TOKEN`   |
+| `new_novel_checker.py`       | **New Series Launch** (first free chapter)   | `free_feed`            | Per‑novel thread    | `DISCORD_BOT_TOKEN`,      |
 
 > If you kept any legacy channel‑based jobs (e.g., old arc checker), those may still use `DISCORD_CHANNEL_ID` / webhook. Mistmint posts route to threads instead.
 
@@ -151,47 +151,20 @@ python new_novel_checker.py --feed free
   - Uppercase
   - Replace non‑alphanumeric with `_`
   - Trim `_` on both ends
-- THREAD_ID resolution order:
-  - THREAD_ID_MAP["SHORTCODE"]
-  - <SHORTCODE>_THREAD_ID (legacy fallback)
-  - ERROR + skip novel
-    
----
-
-## Legacy mode (optional)
-
-- If you prefer the old per-novel secrets:
-  - You may keep <SHORTCODE>_THREAD_ID secrets
-  - You must also wire each one into YAML
-  - Scripts will automatically fallback to them if THREAD_ID_MAP has no match
-
-> This mode requires manual YAML updates and is not recommended.
-
+  - 
 ---
 
 ## Add a new Mistmint novel (per-novel thread mapping)
 
 When you add a Mistmint Haven novel, do **two** things:
 
-1) **Create the secret**
-   - Go to: **Settings → Secrets and variables → Actions → New repository secret**
-   - Name: `<SHORTCODE>_THREAD_ID`  
-     Example: `TDLBKGC_THREAD_ID`
-   - Value: the Discord **thread ID** (numbers only), e.g. `1433327716937240626`
-
-2) **Wire the secret into the workflow env**
-   - When using THREAD_ID_MAP you only wire ONE secret in YAML:
-
-env:
-  DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-  THREAD_ID_MAP: ${{ secrets.THREAD_ID_MAP }}
-
-     ```yaml
-    env:
-      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-      THREAD_ID_MAP: ${{ secrets.THREAD_ID_MAP }}
-     ```
----
+1) **Add to thread to `thread_id_map.json`**
+   - Example:
+```
+{
+  "TVITPA":"1444214902322368675"
+}
+```
 
 ## Add a new Mistmint paid chapter (rss-feed repo side)
 
