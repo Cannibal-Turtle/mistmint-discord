@@ -178,14 +178,6 @@ def _is_nsfw(entry) -> bool:
     cat = (entry.get("category") or entry.get("Category") or "").strip().upper()
     return cat == "NSFW"
 
-def _short_code(e):
-    for k in ("short_code", "shortcode", "shortCode", "short"):
-        v = e.get(k)
-        if v: return _norm(v)
-    meta = e.get("meta") or {}
-    v = meta.get("short_code") or meta.get("shortcode") or meta.get("shortCode")
-    return _norm(v) if v else None
-
 def _thread_id_for(short_code):
     if not short_code:
         return None
@@ -290,7 +282,7 @@ async def send_new_paid_entries():
             if not thread_id:
                 print(
                     f"⚠️ Skip: no thread id for shortcode '{short_code}' "
-                    f"in THREAD_ID_MAP or env {short_code.upper()}_THREAD_ID (guid={guid})"
+                    f"in {THREAD_MAP_FILE} (guid={guid})"
                 )
                 continue
 
