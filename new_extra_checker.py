@@ -7,8 +7,7 @@ Detects Extras / Side Stories in paid feeds and posts ONE announcement
 into each novel's per-thread channel (no global fallback).
 
 Routing:
-  - For each novel, resolve its thread via env:
-      <SHORTCODE>_THREAD_ID   (e.g. TDLBKGC_THREAD_ID=1433327...)
+  - Thread IDs are resolved from thread_id_map.json using novel short_code.
   - short_code taken from HOSTING_SITE_DATA[host].novels[title]['short_code']
     else derived from title: uppercase + non-alnum -> underscore.
 
@@ -43,11 +42,16 @@ BOT_TOKEN_ENV   = "DISCORD_BOT_TOKEN"
 # Only attempt PATCH /channels/{id} if the bot has Manage Threads
 USE_UNARCHIVE   = os.getenv("USE_UNARCHIVE", "0") == "1"
 
-THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+THREAD_MAP_FILE = "thread_id_map.json"
+
 try:
-    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
-except json.JSONDecodeError:
-    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
+        THREAD_ID_MAP = json.load(f)
+except FileNotFoundError:
+    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
+    THREAD_ID_MAP = {}
+except json.JSONDecodeError as e:
+    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
     THREAD_ID_MAP = {}
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -223,33 +227,19 @@ def sanitize_shortcode_from_title(title: str) -> str:
     """Fallback SHORTCODE from title (A–Z/0–9 only)."""
     return re.sub(r"[^A-Z0-9]+", "_", (title or "").upper()).strip("_")
 
-def thread_env_key_for(short_code: str) -> str:
-    return f"{short_code}_THREAD_ID"
-
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
-    """
-    Find the per-novel thread id using:
-      1) THREAD_ID_MAP JSON (preferred)
-      2) <SHORTCODE>_THREAD_ID env fallback
-    """
-    # Prefer explicit short_code, else fallback from title
     short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
     key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
 
-    # 1) THREAD_ID_MAP JSON (keys like "TDLBKGC", "TVITPA")
-    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
-
-    # 2) Old-style env fallback, e.g. TDLBKGC_THREAD_ID
-    if not val:
-        env_key = thread_env_key_for(key)
-        val = os.getenv(env_key, "").strip() or None
-
+    val = THREAD_ID_MAP.get(key)
     if not val:
         print(
             f"❌ No thread id for {novel_title}. "
-            f"Add \"{key}\" to THREAD_ID_MAP or define {key}_THREAD_ID."
+            f"Add \"{key}\" to {THREAD_MAP_FILE}."
         )
-    return val
+        return None
+
+    return str(val)
 
 # ─── CORE ──────────────────────────────────────────────────────────────────────
 def process_extras(novel: dict):
@@ -293,7 +283,6 @@ def process_extras(novel: dict):
         return
 
     # 3) NSFW log (no pings)
-    entries = paid_feed.entries
     is_nsfw = (novel["novel_title"] in get_nsfw_novels())
     print(f"🕵️ is_nsfw={is_nsfw} for {novel['novel_title']}")
 
@@ -404,8 +393,9 @@ def process_extras(novel: dict):
     
     if safe_send_bot(bot_token, thread_id, msg):
         meta["last_extra_announced"] = current
-        meta["extra_announced"]      = True  # never fire again
-        save_state(state)
+        meta["extra_announced"]      = True
+    
+        save_state(state)   # state was loaded earlier in THIS function
         commit_state_update(STATE_PATH)
 
 
