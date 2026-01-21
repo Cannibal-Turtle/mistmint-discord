@@ -77,7 +77,7 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
      - **Thread ID**: `1433327716937240626`
 
 3. **Add the thread ID to THREAD_ID_MAP (recommended):**
-   - Edit the existing `THREAD_ID_MAP.json`
+   - Edit the existing `thread_id_map.json`
    - Append a new key:
 
      "NEWCODE": "123456789012345678"
