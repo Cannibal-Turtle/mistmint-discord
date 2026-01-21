@@ -14,7 +14,6 @@ permissions:
 
 env:
   DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-  THREAD_ID_MAP: ${{ secrets.THREAD_ID_MAP }}
 
 jobs:
   comments:
