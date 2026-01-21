@@ -10,7 +10,7 @@ Routing:
   For each novel, resolve a thread id from environment:
     - If HOSTING_SITE_DATA[host].novels[title]['short_code'] exists, use it.
     - Else derive from title: uppercase + non-alnum -> underscore.
-  Then read env:  <SHORTCODE>_THREAD_ID   (e.g. TDLBKGC_THREAD_ID=1433...)
+  Thread IDs are resolved from thread_id_map.json using novel short_code.
 
 Notes:
   - Only processes novels under host "Mistmint Haven".
@@ -38,11 +38,16 @@ NSFW_ROLE_ID  = "<@&1343352825811439616>"  # detected but NOT mentioned
 # Only attempt PATCH /channels/{id} if the bot has Manage Threads
 USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
 
-THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+THREAD_MAP_FILE = "thread_id_map.json"
+
 try:
-    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
-except json.JSONDecodeError:
-    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
+        THREAD_ID_MAP = json.load(f)
+except FileNotFoundError:
+    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
+    THREAD_ID_MAP = {}
+except json.JSONDecodeError as e:
+    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
     THREAD_ID_MAP = {}
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -251,28 +256,12 @@ def number_to_emoji(n: int) -> str:
 def sanitize_shortcode_from_title(title: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "_", (title or "").upper()).strip("_")
 
-def thread_env_key_for(short_code: str) -> str:
-    return f"{short_code}_THREAD_ID"
-
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
-    """
-    Find the per-novel thread id using:
-      1) THREAD_ID_MAP JSON (preferred)
-      2) <SHORTCODE>_THREAD_ID env fallback
-    """
-    # Prefer explicit short_code, else fallback from title
     short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
     key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
 
-    # 1) THREAD_ID_MAP JSON (keys like "TDLBKGC", "TVITPA")
-    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
-
-    # 2) Old style env fallback, e.g. TDLBKGC_THREAD_ID
-    if not val:
-        env_key = thread_env_key_for(key)
-        val = os.getenv(env_key, "").strip() or None
-
-    return val
+    val = THREAD_ID_MAP.get(key)
+    return str(val) if val else None
 
 
 # === CORE ARC DETECTION ===
@@ -523,7 +512,7 @@ if __name__ == "__main__":
                 sc = (d.get("short_code") or sanitize_shortcode_from_title(title)).upper()
                 print(
                     f"❌ No thread id for {title}. "
-                    f"Add \"{sc}\" to THREAD_ID_MAP or define {sc}_THREAD_ID."
+                    f"Add \"{sc}\" to {THREAD_MAP_FILE}."
                 )
                 continue
 
