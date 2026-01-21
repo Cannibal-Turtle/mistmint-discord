@@ -23,11 +23,16 @@ RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/pa
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 NSFW_ROLE        = "<@&1402533039497805894>"
 
-THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+THREAD_MAP_FILE = "thread_id_map.json"
+
 try:
-    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
-except json.JSONDecodeError:
-    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
+        THREAD_ID_MAP = json.load(f)
+except FileNotFoundError:
+    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
+    THREAD_ID_MAP = {}
+except json.JSONDecodeError as e:
+    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
     THREAD_ID_MAP = {}
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -185,20 +190,12 @@ def _thread_id_for(short_code):
     if not short_code:
         return None
 
-    # Normalized key (matches your JSON keys like "TDLBKGC", "TVITPA")
     key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
-
-    # 1) Try THREAD_ID_MAP (uppercased key or raw short_code)
-    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
-
-    # 2) Fallback to old env style: TDLBKGC_THREAD_ID, TVITPA_THREAD_ID, etc.
-    if not val:
-        env_key = f"{key}_THREAD_ID"
-        val = os.getenv(env_key, "").strip() or None
+    val = THREAD_ID_MAP.get(key)
 
     try:
         return int(val) if val else None
-    except ValueError:
+    except (TypeError, ValueError):
         return None
 
 
