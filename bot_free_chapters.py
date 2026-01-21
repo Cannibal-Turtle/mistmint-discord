@@ -190,7 +190,7 @@ async def send_new_entries():
     async def on_ready():
         _guids = [_guid(e) for e in entries]
         _last  = state.get(FEED_KEY)
-        queue  = entries[_guids.index(_last)+1:] if _last in _guids else entries
+        queue = to_send
 
         new_last = _last
         for entry in queue:
@@ -208,7 +208,11 @@ async def send_new_entries():
                 )
                 continue
 
-            dest = bot.get_channel(thread_id) or await bot.fetch_channel(thread_id)
+            try:
+                dest = bot.get_channel(thread_id) or await bot.fetch_channel(thread_id)
+            except (Forbidden, discord.NotFound, HTTPException) as e:
+                print(f"⚠️ Cannot access thread {thread_id}: {e}. Skipping {guid}.")
+                continue
             
             # Make sure we can actually post (join + unarchive + set auto-archive if allowed)
             ok = await ensure_thread_ready(dest)
