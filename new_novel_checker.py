@@ -19,10 +19,9 @@ Behavior:
         - Post both to the novel's thread (per-novel secret).
         - Write launch_free info into state.json so we never post it again.
 
-Env vars required:
-  DISCORD_BOT_TOKEN  -> your bot token (not webhook)
-  For each Mistmint novel thread, set:  <SHORTCODE>_THREAD_ID
-    e.g.  TDLBKGC_THREAD_ID=1433788343954575562
+Thread routing:
+  - Thread IDs are resolved from thread_id_map.json using novel short_code.
+  - Optional fallback: <SHORTCODE>_THREAD_ID env var.
 
 Notes:
 - SHORTCODE is taken from HOSTING_SITE_DATA.novels[...]['short_code'] if present.
@@ -61,11 +60,16 @@ NSFW_ROLE   = "<@&1343352825811439616>"
 # Mistmint server id (to build follow-this-thread URL)
 MISTMINT_GUILD_ID = "1379303379221614702"
 
-THREAD_ID_MAP_RAW = os.getenv("THREAD_ID_MAP", "{}") or "{}"
+THREAD_MAP_FILE = "thread_id_map.json"
+
 try:
-    THREAD_ID_MAP = json.loads(THREAD_ID_MAP_RAW)
-except json.JSONDecodeError:
-    print("⚠️ THREAD_ID_MAP is not valid JSON; using empty map.")
+    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
+        THREAD_ID_MAP = json.load(f)
+except FileNotFoundError:
+    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
+    THREAD_ID_MAP = {}
+except json.JSONDecodeError as e:
+    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
     THREAD_ID_MAP = {}
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -278,31 +282,19 @@ def sanitize_shortcode_from_title(title: str) -> str:
 def thread_env_key_for(short_code: str) -> str:
     return f"{short_code}_THREAD_ID"
   
-
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
-    """
-    Find the per-novel thread id using:
-      1) THREAD_ID_MAP JSON (preferred)
-      2) <SHORTCODE>_THREAD_ID env fallback
-    """
-    # Prefer explicit short_code, else fallback from title
     short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
     key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
 
-    # 1) THREAD_ID_MAP JSON (keys like "TDLBKGC", "TVITPA")
-    val = (THREAD_ID_MAP.get(key) or THREAD_ID_MAP.get(short_code) or "").strip() or None
-
-    # 2) Old-style env fallback, e.g. TDLBKGC_THREAD_ID
-    if not val:
-        env_key = thread_env_key_for(key)
-        val = os.getenv(env_key, "").strip() or None
-
+    val = THREAD_ID_MAP.get(key)
     if not val:
         print(
             f"❌ No thread id for {novel_title}. "
-            f"Add \"{key}\" to THREAD_ID_MAP or define {key}_THREAD_ID."
+            f"Add \"{key}\" to {THREAD_MAP_FILE}."
         )
-    return val
+        return None
+
+    return str(val)
 
 
 def build_thread_url(thread_id: str) -> str:
