@@ -1,6 +1,8 @@
 {
   "free_last_guid": "f07d9254-6f2e-41ed-a98d-0c604175ba24",
+  "free_seen_guids": [],
   "paid_last_guid": "8d5888d0-9163-4a09-890d-9411c5942328",
+  "paid_seen_guids": [],
   "comments_seen_guids": [
     "Mistmint Haven::dd73bb22-960c-4446-b2f2-02f4f369521b",
     "Mistmint Haven::1d9e0ad0-d817-4b01-8eed-93fa38f0c063",
