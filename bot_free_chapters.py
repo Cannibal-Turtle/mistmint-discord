@@ -17,6 +17,8 @@ STATE_FILE = "state_rss.json"
 FEED_KEY   = "free_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
 HOST_NAME_TARGET = "Mistmint Haven"
+SEEN_KEY = "free_seen_guids"
+SEEN_CAP = 500
 
 GLOBAL_MENTION = "||@everyone||"
 
@@ -35,12 +37,22 @@ except json.JSONDecodeError as e:
 
 def load_state():
     try:
-        return json.load(open(STATE_FILE, encoding="utf-8"))
+        st = json.load(open(STATE_FILE, encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
-        initial = {"free_last_guid": None, "paid_last_guid": None, "comments_last_guid": None}
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(initial, f, indent=2, ensure_ascii=False)
-        return initial
+        st = {
+            "free_last_guid": None,
+            "paid_last_guid": None,
+            "comments_seen_guids": [],
+            SEEN_KEY: []
+        }
+        save_state(st)
+        return st
+
+    if SEEN_KEY not in st:
+        st[SEEN_KEY] = []
+        save_state(st)
+
+    return st
 
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
@@ -170,14 +182,12 @@ def _join_mentions(*parts: str) -> str:
 
 async def send_new_entries():
     state = load_state()
-    last  = state.get(FEED_KEY)
 
     feed     = feedparser.parse(RSS_URL)
     all_ents = list(reversed(feed.entries))            # oldest → newest
     entries  = [e for e in all_ents if _is_mistmint(e)]
 
-    guids   = [_guid(e) for e in entries]
-    to_send = entries[guids.index(last)+1:] if last in guids else entries
+    to_send = entries
 
     if not to_send:
         print("🛑 No new Mistmint free chapters—skipping Discord login.")
@@ -188,13 +198,18 @@ async def send_new_entries():
 
     @bot.event
     async def on_ready():
-        _guids = [_guid(e) for e in entries]
-        _last  = state.get(FEED_KEY)
         queue = to_send
 
-        new_last = _last
         for entry in queue:
             guid       = _guid(entry)
+            if not guid:
+                continue
+        
+            norm = f"{HOST_NAME_TARGET}::{guid}"
+            if norm in state[SEEN_KEY]:
+                print(f"↷ Already sent, skipping {norm}")
+                continue
+                
             short_code = find_short_code_for_entry(entry)
             if not short_code:
                 print(f"⚠️ Skip: no short_code in entry guid={guid}")
@@ -263,13 +278,12 @@ async def send_new_entries():
             allowed = AllowedMentions(everyone=True, users=True, roles=True)
             await dest.send(content=content, embed=embed, view=view, allowed_mentions=allowed)
 
-            print(f"📨 Sent: {chaptername} / {guid} → thread {thread_id}")
-            new_last = guid
-
-        if new_last and new_last != state.get(FEED_KEY):
-            state[FEED_KEY] = new_last
+            state[SEEN_KEY].append(norm)
+            state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
+            state["free_last_guid"] = guid  # optional, but useful
             save_state(state)
-            print(f"💾 Updated {STATE_FILE} → {new_last}")
+
+            print(f"📨 Sent: {chaptername} / {guid} → thread {thread_id}")
 
         await asyncio.sleep(1)
         await bot.close()
