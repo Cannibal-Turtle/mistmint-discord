@@ -19,6 +19,8 @@ TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "state_rss.json"
 FEED_KEY   = "paid_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
+SEEN_KEY = "paid_seen_guids"
+SEEN_CAP = 500
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 NSFW_ROLE        = "<@&1402533039497805894>"
@@ -154,12 +156,22 @@ def find_short_code_for_entry(entry):
 
 def load_state():
     try:
-        return json.load(open(STATE_FILE, encoding="utf-8"))
+        st = json.load(open(STATE_FILE, encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
-        initial = {"free_last_guid": None, "paid_last_guid": None, "comments_last_guid": None}
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(initial, f, indent=2, ensure_ascii=False)
-        return initial
+        st = {
+            "free_last_guid": None,
+            "paid_last_guid": None,
+            "comments_seen_guids": [],
+            SEEN_KEY: []
+        }
+        save_state(st)
+        return st
+
+    if SEEN_KEY not in st:
+        st[SEEN_KEY] = []
+        save_state(st)
+
+    return st
 
 
 def save_state(state):
@@ -240,13 +252,11 @@ def get_coin_button_parts(host: str, novel_title: str, fallback_price: str, fall
 async def send_new_paid_entries():
     MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "10"))
     state   = load_state()
-    last    = state.get(FEED_KEY)
     feed    = await asyncio.to_thread(feedparser.parse, RSS_URL)
     all_ents = list(reversed(feed.entries))              # oldest → newest
     entries  = [e for e in all_ents if _is_mistmint(e)]  # Mistmint-only
 
-    guids   = [_guid(e) for e in entries]
-    to_send = entries[guids.index(last)+1:] if last in guids else entries
+    to_send = entries
 
     if not to_send:
         print("🛑 No new Mistmint paid chapters—skipping Discord login.")
@@ -262,17 +272,21 @@ async def send_new_paid_entries():
         
         sent = 0
         
-        _guids = [_guid(e) for e in entries]
-        _last  = state.get(FEED_KEY)
         queue = to_send
 
-        new_last = _last
-        
         for entry in queue:
             if sent >= MAX_PER_RUN:
                 print(f"🛑 Reached MAX_PER_RUN={MAX_PER_RUN}, stopping")
                 break
             guid         = _guid(entry)
+            if not guid:
+                continue
+        
+            norm = f"{HOST_NAME_TARGET}::{guid}"
+            if norm in state[SEEN_KEY]:
+                print(f"↷ Already sent, skipping {norm}")
+                continue
+
             short_code   = find_short_code_for_entry(entry)
             if not short_code:
                 print(f"⚠️ Skip: no short_code in entry guid={guid}")
@@ -370,12 +384,11 @@ async def send_new_paid_entries():
 
             print(f"📨 Sent paid: {chaptername} / {guid} → thread {thread_id}")
             sent += 1
-            new_last = guid
-
-        if new_last and new_last != state.get(FEED_KEY):
-            state[FEED_KEY] = new_last
+            
+            state[SEEN_KEY].append(norm)
+            state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
+            state["paid_last_guid"] = guid  # optional, debug only
             save_state(state)
-            print(f"💾 Updated {STATE_FILE}[\"{FEED_KEY}\"] → {new_last}")
 
         await asyncio.sleep(1)
         await bot.close()
