@@ -27,6 +27,10 @@
     "launch_free": {
       "chapter": "Chapter 1",
       "sent_at": "2026-02-08T03:32:58.502710"
+    },
+    "paid_completion": {
+      "chapter": "Chapter Afterword 2",
+      "sent_at": "2026-02-08T13:29:14.845888"
     }
   }
 }
