@@ -13,6 +13,7 @@ from discord import Embed
 from discord.ui import View, Button
 
 from novel_mappings import HOSTING_SITE_DATA
+from new_arc_checker import process_arc, resolve_thread_id
 
 # ─── CONFIG (no fallback channel) ──────────────────────────────────────────────
 TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
@@ -249,6 +250,26 @@ def get_coin_button_parts(host: str, novel_title: str, fallback_price: str, fall
 # ───────────────────────────────────────────────────────────────────────────────
 
 
+def is_arc_start_entry(entry):
+    raw_vol    = (entry.get("volume") or "").strip()
+    raw_extend = (entry.get("nameextend") or "").strip()
+    raw_chap   = (entry.get("chaptername") or "").strip()
+
+    def is_new_marker(raw):
+        if not raw:
+            return False
+        raw = raw.strip()
+        return bool(re.search(r"(001|\(1\)|\.\s*1)(\*+)?\s*$", raw))
+
+    if is_new_marker(raw_extend) or is_new_marker(raw_chap):
+        return True
+
+    if re.match(r"(?i)^(arc|world|plane|story|volume|vol|v)\s*\d+", raw_vol):
+        if is_new_marker(raw_extend):
+            return True
+
+    return False
+    
 async def send_new_paid_entries():
     MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "10"))
     state   = load_state()
@@ -291,6 +312,33 @@ async def send_new_paid_entries():
             if not short_code:
                 print(f"⚠️ Skip: no short_code in entry guid={guid}")
                 continue
+
+            # ── ARC CHECK BEFORE SENDING PAID CHAPTER ──
+            if is_arc_start_entry(entry):
+                novels  = (HOSTING_SITE_DATA.get(HOST_NAME_TARGET, {}) or {}).get("novels", {})
+                title_key = _norm(entry.get("title"))
+                details = novels.get(title_key)
+                
+                if not details:
+                    for k, v in novels.items():
+                        if k.casefold() == title_key.casefold():
+                            details = v
+                            break
+            
+                if details:
+                    thread_id_for_arc = _thread_id_for(short_code)
+            
+                    novel_obj = {
+                        "novel_title": _norm(entry.get("title")),
+                        "host": HOST_NAME_TARGET,
+                        "free_feed": details.get("free_feed"),
+                        "paid_feed": details.get("paid_feed"),
+                        "novel_link": details.get("novel_url", ""),
+                        "history_file": details.get("history_file", ""),
+                    }
+            
+                    print(f"🌸 Arc start detected for {_norm(entry.get('title'))}")
+                    process_arc(novel_obj, thread_id_for_arc)
 
             thread_id = _thread_id_for(short_code)
             if not thread_id:
