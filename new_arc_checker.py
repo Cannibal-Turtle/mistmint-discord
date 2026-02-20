@@ -421,81 +421,84 @@ def process_arc(novel, thread_id: str):
         locked_lines[-1] = f"<a:9410pinkarrow:1368139217556996117>{locked_lines[-1]}"
     locked_md = "\n".join(locked_lines) if locked_lines else "None"
 
-    # 4. Build messages (no pings, no role-react footer)
-    content_header = (
-        "## <a:announcement:1365566215975731274> NEW ARC ALERT"
-        "<a:pinksparkles:1365566023201198161>"
-        "<a:Butterfly:1365572264774471700>"
-        "<a:pinksparkles:1365566023201198161>\n"
-        f"***<:babypinkarrowleft:1365566594503147550>"
-        f"<:world_01:1368202193038999562>"
-        f"<:world_02:1368202204468613162> {world_emoji}"
-        f"<:babypinkarrowright:1365566635838275595>is Live for*** "
-        "<a:pinkloading:1365566815736172637>\n"
-        f"### [{novel['novel_title']}]({novel['novel_link']}) "
-        "<a:Turtle_Police:1365223650466205738>\n"
-        "❀° ┄───────────────────────╮"
-    )
-
-    embed_unlocked = None
-    if unlocked_md:
-        embed_unlocked = {"description": f"||{unlocked_md}||", "color": 0xFFF9BF}
-
-    embed_locked = {"description": f"||{locked_md}||", "color": 0xA87676}
-
-    footer_and_react = (
-        "╰───────────────────────┄ °❀\n"
-        f"> *Advance access is ready for you on {novel['host']}! "
-        "<a:holo_diamond:1365566087277711430>*\n"
-        + "<:pinkdiamond_border:1365575603734183936>" * 6
-    )
-
-    # 5. Send to thread
-    header_ok = False
-    try:
-        # Preflight: join; unarchive only when allowed
-        ensure_bot_in_thread(BOT_TOKEN, thread_id)
-        if USE_UNARCHIVE:
-            unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
-    
-        post_message(thread_id, content_header, suppress_embeds=True)
-        header_ok = True
-        print(f"✅ Header sent: {new_full}")
-    except requests.RequestException as e:
-        print(f"⚠️ Header send failed: {e}", file=sys.stderr)
-
-    if embed_unlocked:
-        try:
-            post_message(thread_id, "<a:5693pinkwings:1368138669004820500> `Unlocked 🔓` <a:5046_bounce_pink:1368138460027813888>",
-                         embeds=[embed_unlocked])
-            print("✅ Unlocked embed sent")
-        except requests.RequestException as e:
-            print(f"⚠️ Unlocked send failed: {e}", file=sys.stderr)
-    else:
-        print("ℹ️ No unlocked arcs block.")
-
-    try:
-        post_message(thread_id, "<a:5693pinkwings:1368138669004820500> `Locked 🔐` <a:5046_bounce_pink:1368138460027813888>",
-                     embeds=[embed_locked])
-        print("✅ Locked embed sent")
-    except requests.RequestException as e:
-        print(f"⚠️ Locked send failed: {e}", file=sys.stderr)
-
-    try:
-        post_message(thread_id, footer_and_react, suppress_embeds=True)
-        print("✅ Footer sent")
-    except requests.RequestException as e:
-        print(f"⚠️ Footer send failed: {e}", file=sys.stderr)
-
-    # 6. Record announcement
-    if header_ok:
-        history["last_announced"] = new_full
-        save_history(history, history_file)
-        commit_history_update(history_file)
-        print(f"📌 Recorded last_announced = {new_full}")
-    else:
-        print("⚠️ Skipped updating last_announced (header failed).")
-
+  
+    def post_arc_announcement():
+            # 4. Build messages (no pings, no role-react footer)
+            content_header = (
+                "## <a:announcement:1365566215975731274> NEW ARC ALERT"
+                "<a:pinksparkles:1365566023201198161>"
+                "<a:Butterfly:1365572264774471700>"
+                "<a:pinksparkles:1365566023201198161>\n"
+                f"***<:babypinkarrowleft:1365566594503147550>"
+                f"<:world_01:1368202193038999562>"
+                f"<:world_02:1368202204468613162> {world_emoji}"
+                f"<:babypinkarrowright:1365566635838275595>is Live for*** "
+                "<a:pinkloading:1365566815736172637>\n"
+                f"### [{novel['novel_title']}]({novel['novel_link']}) "
+                "<a:Turtle_Police:1365223650466205738>\n"
+                "❀° ┄───────────────────────╮"
+            )
+        
+            embed_unlocked = None
+            if unlocked_md:
+                embed_unlocked = {"description": f"||{unlocked_md}||", "color": 0xFFF9BF}
+        
+            embed_locked = {"description": f"||{locked_md}||", "color": 0xA87676}
+        
+            footer_and_react = (
+                "╰───────────────────────┄ °❀\n"
+                f"> *Advance access is ready for you on {novel['host']}! "
+                "<a:holo_diamond:1365566087277711430>*\n"
+                + "<:pinkdiamond_border:1365575603734183936>" * 6
+            )
+        
+            # 5. Send to thread
+            header_ok = False
+            try:
+                # Preflight: join; unarchive only when allowed
+                ensure_bot_in_thread(BOT_TOKEN, thread_id)
+                if USE_UNARCHIVE:
+                    unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
+            
+                post_message(thread_id, content_header, suppress_embeds=True)
+                header_ok = True
+                print(f"✅ Header sent: {new_full}")
+            except requests.RequestException as e:
+                print(f"⚠️ Header send failed: {e}", file=sys.stderr)
+        
+            if embed_unlocked:
+                try:
+                    post_message(thread_id, "<a:5693pinkwings:1368138669004820500> `Unlocked 🔓` <a:5046_bounce_pink:1368138460027813888>",
+                                 embeds=[embed_unlocked])
+                    print("✅ Unlocked embed sent")
+                except requests.RequestException as e:
+                    print(f"⚠️ Unlocked send failed: {e}", file=sys.stderr)
+            else:
+                print("ℹ️ No unlocked arcs block.")
+        
+            try:
+                post_message(thread_id, "<a:5693pinkwings:1368138669004820500> `Locked 🔐` <a:5046_bounce_pink:1368138460027813888>",
+                             embeds=[embed_locked])
+                print("✅ Locked embed sent")
+            except requests.RequestException as e:
+                print(f"⚠️ Locked send failed: {e}", file=sys.stderr)
+        
+            try:
+                post_message(thread_id, footer_and_react, suppress_embeds=True)
+                print("✅ Footer sent")
+            except requests.RequestException as e:
+                print(f"⚠️ Footer send failed: {e}", file=sys.stderr)
+        
+            # 6. Record announcement
+            if header_ok:
+                history["last_announced"] = new_full
+                save_history(history, history_file)
+                commit_history_update(history_file)
+                print(f"📌 Recorded last_announced = {new_full}")
+            else:
+                print("⚠️ Skipped updating last_announced (header failed).")
+              
+    post_arc_announcement()
 
 # === LOAD & RUN ===
 if __name__ == "__main__":
