@@ -13,7 +13,6 @@ permissions:
 jobs:
   extra_checker:
     runs-on: ubuntu-latest
-    needs: arc_checker
     if: >
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
