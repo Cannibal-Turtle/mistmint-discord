@@ -48,11 +48,8 @@ jobs:
           echo "Using channel/thread: $CHANNEL_ID"
 
           # 🇲🇾 Malaysia time (UTC+8)
-          TODAY_START=$(TZ=Asia/Kuala_Lumpur date +"%Y-%m-%dT00:00:00")
-          echo "MYT start of today: $TODAY_START"
-
-          # Convert to milliseconds
-          CUTOFF_MS=$(date -d "$TODAY_START" +%s%3N)
+          TODAY_START=$(TZ=Asia/Kuala_Lumpur date +"%Y-%m-%d 00:00:00")
+          CUTOFF_MS=$(TZ=Asia/Kuala_Lumpur date -d "$TODAY_START" +%s%3N)
           DISCORD_EPOCH=1420070400000
 
           # Convert to snowflake
@@ -85,8 +82,12 @@ jobs:
               }
 
               ID=$(_jq '.id')
-
-              if [ "$ID" -lt "$CUTOFF_SNOWFLAKE" ]; then
+              TIMESTAMP=$(_jq '.timestamp')
+              
+              # Convert Discord timestamp to epoch ms
+              MSG_MS=$(date -d "$TIMESTAMP" +%s%3N)
+              
+              if [ "$MSG_MS" -lt "$CUTOFF_MS" ]; then
                 STOP=true
                 break
               fi
