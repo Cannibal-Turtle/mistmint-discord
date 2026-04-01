@@ -148,16 +148,8 @@
     "Mistmint Haven::8c99a070-c209-4113-b0ea-12a824763f6d",
     "Mistmint Haven::a22df49b-d37a-4e6b-a092-6355b0f899c0"
   ],
-  "paid_last_guid": "318345c3-c6b9-47f3-8144-53bc9a410140",
+  "paid_last_guid": "34fa07df-dbe1-48ae-98bd-e31aa7894a30",
   "paid_seen_guids": [
-    "Mistmint Haven::55b8cb48-a20e-4a2a-b02b-543f8d3ce5f7",
-    "Mistmint Haven::fc6cdb56-416f-4b31-90e7-17aa1825315e",
-    "Mistmint Haven::007a121a-94a0-4f96-82a9-eabb999d97a5",
-    "Mistmint Haven::1183eb24-e315-408a-8898-41af1e38e757",
-    "Mistmint Haven::a89bf970-ca2c-4ba2-929f-bd9592d3a405",
-    "Mistmint Haven::55c2358b-fc6d-48ec-aa35-1f271cd5ade8",
-    "Mistmint Haven::f95e38e9-f408-4aee-af5e-1aa6d12d9c00",
-    "Mistmint Haven::9ac291c0-09eb-4aa3-8177-547afd34b1b1",
     "Mistmint Haven::50a6dbd6-4be5-4419-a0d4-e954d701ecad",
     "Mistmint Haven::9bbd5583-165d-4f7f-a9e9-61af6e0ec4e6",
     "Mistmint Haven::87ef9302-be2b-44ee-b51c-59d4218eb737",
@@ -649,7 +641,15 @@
     "Mistmint Haven::e8dc91d4-8fcd-4bac-aa2e-9ac5d2cdc142",
     "Mistmint Haven::b8643421-c419-4eef-9dbd-ab6b935b61c5",
     "Mistmint Haven::6f906535-d656-445e-abc6-f0cce5358bc3",
-    "Mistmint Haven::318345c3-c6b9-47f3-8144-53bc9a410140"
+    "Mistmint Haven::318345c3-c6b9-47f3-8144-53bc9a410140",
+    "Mistmint Haven::3b076b79-c8ef-40b4-9591-11dd2cdb65e4",
+    "Mistmint Haven::46b6291d-8b19-40fb-8d72-08d4125c547e",
+    "Mistmint Haven::7e7bbbe9-a255-4cf7-94e1-98753ab44881",
+    "Mistmint Haven::4d7b11a1-0df6-4f87-a1b8-9c8bf6c32608",
+    "Mistmint Haven::eddda7d8-bf13-437a-a54a-d93acc391f40",
+    "Mistmint Haven::b996752d-18ec-4063-9e7c-181c3f33099c",
+    "Mistmint Haven::61887f6d-a860-4d7c-866a-58ca3800429f",
+    "Mistmint Haven::34fa07df-dbe1-48ae-98bd-e31aa7894a30"
   ],
   "comments_seen_guids": [
     "Mistmint Haven::dd73bb22-960c-4446-b2f2-02f4f369521b",
