@@ -505,7 +505,9 @@ if __name__ == "__main__":
     for host, host_data in (HOSTING_SITE_DATA or {}).items():
         if host != HOST_TARGET:
             continue
-        for title, d in host_data.get("novels", {}).items():
+
+        novels_dict = host_data.get("novels", {})
+        for title, d in reversed(list(novels_dict.items())):
             # needs both feeds to do “locked vs unlocked” logic
             if not d.get("free_feed") or not d.get("paid_feed"):
                 continue
