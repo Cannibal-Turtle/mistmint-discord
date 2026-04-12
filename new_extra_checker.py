@@ -419,5 +419,5 @@ if __name__ == "__main__":
                 "short_code":    d.get("short_code",""),
             })
 
-    for novel in novels:
+    for novel in reversed(novels):
         process_extras(novel)
