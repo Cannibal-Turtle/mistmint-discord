@@ -176,6 +176,8 @@ def load_history(history_file):
     return {"unlocked": [], "locked": [], "last_announced": ""}
 
 def save_history(history, history_file):
+    """Saves the novel's arc history to JSON file with proper encoding."""
+    os.makedirs(os.path.dirname(history_file), exist_ok=True)
     print(f"📂 Saving {history_file} (unlocked={len(history['unlocked'])}, locked={len(history['locked'])}, last={history['last_announced']})")
     with open(history_file, "w", encoding="utf-8") as f:
         json.dump(history, f, indent=4, ensure_ascii=False)
