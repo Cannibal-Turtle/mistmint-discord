@@ -402,7 +402,7 @@ def main():
 
     now_local = datetime.now(timezone.utc).astimezone()
 
-    for novel in novels:
+    for novel in reversed(novels):
         if novel["host"] != "Mistmint Haven":
             continue
         novel_title = novel["novel_title"]
