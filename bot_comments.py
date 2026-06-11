@@ -217,7 +217,6 @@ def main():
             print(f"↷ Already sent, skipping {norm}")
             continue
 
-        # Always advance past non-Mistmint items so we don't loop on them.
         if host != HOST_TARGET:
             print(f"↷ Skipping non-Mistmint host: {host}  ({novel_title})")
             continue
@@ -232,6 +231,8 @@ def main():
         comment_txt = (entry.get("description") or "").strip()
         reply_chain = (entry.get("reply_chain") or "").strip()
         host_logo   = (getattr(entry, "hostLogo", None) or getattr(entry, "hostlogo", None) or {}).get("url", "")
+        comment_image_obj = entry.get("commentImage") or entry.get("commentimage") or {}
+        comment_image = comment_image_obj.get("url", "").strip() if isinstance(comment_image_obj, dict) else ""
         link        = (entry.get("link") or "").strip()
         pubdate_raw = getattr(entry, "published", None)
         timestamp   = dateparser.parse(pubdate_raw).isoformat() if pubdate_raw else None
@@ -257,6 +258,10 @@ def main():
                 "icon_url": host_logo
             }
         }
+
+        if comment_image:
+            embed["image"] = {"url": comment_image}
+  
         if reply_chain:
             embed["description"] = reply_chain
 
