@@ -243,14 +243,13 @@ def main():
         ellipsis     = "..."
         content_max  = 256 - len(start_marker) - len(end_marker) - len(ellipsis)
         safe_comment = (comment_txt[:content_max].rstrip() + ellipsis) if len(comment_txt) > content_max else comment_txt
-        full_title   = f"{start_marker}{safe_comment}{end_marker}"
+        full_title   = "" if (comment_image and comment_txt == "Sticker comment") else f"{start_marker}{safe_comment}{end_marker}"
 
         embed = {
             "author": {
                 "name": f"comment by {author} 🕊️ {chapter}",
                 "url":  link
             },
-            "title":     full_title,
             "timestamp": timestamp,
             "color":     int("F0C7A4", 16),
             "footer": {
@@ -258,6 +257,9 @@ def main():
                 "icon_url": host_logo
             }
         }
+        
+        if full_title:
+            embed["title"] = full_title
 
         if comment_image:
             embed["image"] = {"url": comment_image}
