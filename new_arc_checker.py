@@ -268,7 +268,7 @@ def resolve_thread_id(novel_title: str, details: dict) -> str | None:
 
 # === CORE ARC DETECTION ===
 
-def process_arc(novel, thread_id: str):
+def process_arc(novel, thread_id: str, announce: bool = True):
     print(f"\n=== Processing novel: {novel['novel_title']} → thread {thread_id} ===")
     history_changed = False
 
@@ -374,6 +374,26 @@ def process_arc(novel, thread_id: str):
     # dedupe
     history["unlocked"] = deduplicate(history["unlocked"])
     history["locked"]   = deduplicate(history["locked"])
+
+    # Silent sync mode:
+    # Update arc_history JSON only, but do NOT post Discord announcements.
+    # On first-ever history creation, mark the newest locked arc as already announced
+    # to avoid backfill announcements later.
+    if not announce:
+        first_run = (not had_locked_before and not had_unlocked_before)
+
+        if first_run and (free_created or paid_created) and history["locked"]:
+            history["last_announced"] = history["locked"][-1]
+            history_changed = True
+            print(f"🌱 Sync-only bootstrap: last_announced = {history['last_announced']}")
+
+        if history_changed:
+            save_history(history, history_file)
+            commit_history_update(history_file)
+            print("🔁 Sync-only: saved arc history changes without announcing.")
+        else:
+            print("🔁 Sync-only: no arc history changes.")
+        return
 
     # 3.5 Bootstrap: if first-ever run created entries, save numbering only
     first_run = (not had_locked_before and not had_unlocked_before)
@@ -535,4 +555,5 @@ if __name__ == "__main__":
                 "novel_link":       d.get("novel_url", ""),
                 "history_file":     d.get("history_file", ""),
             }
-            process_arc(novel, thread_id)
+            announce_arcs = os.getenv("ANNOUNCE_ARCS", "1") != "0"
+            process_arc(novel, thread_id, announce=announce_arcs)
