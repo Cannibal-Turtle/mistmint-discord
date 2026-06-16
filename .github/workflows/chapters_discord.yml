@@ -33,6 +33,20 @@ jobs:
           pip install discord.py feedparser python-dateutil requests
           pip install --upgrade "git+https://github.com/Cannibal-Turtle/rss-feed.git@main"
 
+      # Silent arc history sync only.
+      # Does NOT post announcements, so it will not disrupt chapter order.
+      - name: Sync Arc History
+        if: >
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch' ||
+          github.event_name == 'repository_dispatch'
+        timeout-minutes: 10
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          ANNOUNCE_ARCS: "0"
+          USE_UNARCHIVE: "0"
+        run: python new_arc_checker.py
+
       # FREE feed → Mistmint threads
       - name: Run Free Chapters Bot
         if: >
