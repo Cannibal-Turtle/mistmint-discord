@@ -498,7 +498,11 @@ def process_arc(novel, thread_id: str):
                 commit_history_update(history_file)
                 print(f"📌 Recorded last_announced = {new_full}")
             else:
-                print("⚠️ Skipped updating last_announced (header failed).")
+                if history_changed:
+                    save_history(history, history_file)
+                    commit_history_update(history_file)
+                    print("📌 Saved history changes despite header failure (last_announced untouched).")
+                print("⚠️ Skipped updating last_announced because header failed.")
               
     post_arc_announcement()
 
