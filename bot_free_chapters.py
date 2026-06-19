@@ -256,7 +256,7 @@ async def send_new_entries():
                 ts = ts.replace(tzinfo=timezone.utc)
 
             embed = Embed(
-                title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
+                title=f"<a:sun_clouds:1517425608143933470>**{chaptername}**",
                 url=link,
                 timestamp=ts,
                 color=int("FFF9BF", 16),
