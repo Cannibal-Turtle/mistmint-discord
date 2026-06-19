@@ -387,7 +387,7 @@ async def send_new_paid_entries():
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
 
             embed = Embed(
-                title=f"<a:sun_clouds:1517425608143933470>**{chaptername}**",
+                title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
                 url=link,
                 timestamp=timestamp,
                 color=int("A87676", 16),
