@@ -7,8 +7,8 @@ Reads aggregated comment RSS and posts each new item into the per-novel thread
 (on Mistmint Haven only). Routing:
   - Thread IDs are resolved from thread_id_map.json using novel short_code.
 
-SHORTCODE comes from HOSTING_SITE_DATA[host].novels[title]['short_code'],
-else derived from the novel title: uppercase and non-alnum -> underscore.
+SHORTCODE comes from the RSS entry's <short_code>,
+else derived from the novel title.
 
 Env:
   DISCORD_BOT_TOKEN
@@ -25,8 +25,6 @@ import time
 import requests
 import feedparser
 from dateutil import parser as dateparser
-
-from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
@@ -97,13 +95,9 @@ def sanitize_shortcode_from_title(title: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "_", (title or "").upper()).strip("_")
 
 def resolve_thread_id(novel_title: str, short_code: str = "") -> str | None:
-    host_data = (HOSTING_SITE_DATA or {}).get(HOST_TARGET, {})
-    details   = host_data.get("novels", {}).get(novel_title, {}) or {}
-
-    # Feed short_code first, then mapping fallback, then title fallback
+    # Feed short_code first, then title fallback
     sc_raw = (
         (short_code or "").strip()
-        or (details.get("short_code") or "").strip()
         or sanitize_shortcode_from_title(novel_title)
     )
     sc_key = sc_raw.upper()
