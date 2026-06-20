@@ -73,13 +73,31 @@ for host, h in HOSTING_SITE_DATA.items():
             NOVEL_SC[(host.lower(), title)] = sc.upper()
 
 def find_short_code_for_entry(entry):
-    host  = (entry.get("host") or "").strip().lower()
-    title = (entry.get("title") or "").strip()
+    def first(*keys):
+        for k in keys:
+            v = entry.get(k)
+            if v:
+                return str(v)
+            v = entry.get(k.lower()) or entry.get(k.upper())
+            if v:
+                return str(v)
+        return ""
+
+    # 1) Feed-provided short_code — preferred now
+    sc = (first("short_code", "shortcode", "shortCode", "short") or "").strip()
+    if sc:
+        return sc.upper()
+
+    # 2) Mapping fallback
+    host  = (first("host") or "").strip().lower()
+    title = (first("title") or "").strip()
+
     sc = NOVEL_SC.get((host, title), "")
-    if not sc:
-        # helpful debug if a title doesn't match your mapping key exactly
-        print(f"⚠️ No short_code found for host='{host}' title='{title}'. Check mapping key text.")
-    return sc
+    if sc:
+        return sc.upper()
+
+    print(f"⚠️ No short_code found for host='{host}' title='{title}'. Check feed/mapping.")
+    return ""
 
 def _thread_id_for(short_code):
     if not short_code:
