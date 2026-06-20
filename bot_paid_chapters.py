@@ -125,10 +125,15 @@ def find_short_code_for_entry(entry):
                 return str(v)
         return ""
 
+    # 1) Feed-provided short_code — preferred now
+    sc = (first("short_code", "shortcode", "shortCode", "short") or "").strip()
+    if sc:
+        return sc.upper()
+
     host  = (first("host") or "").strip()
     title = (first("title") or "").strip()
 
-    # 1) Mapping-first (case-insensitive title match)
+    # 2) Mapping fallback
     novels  = (HOSTING_SITE_DATA.get(host, {}) or {}).get("novels", {}) or {}
     details = novels.get(title)
     if not details:
@@ -141,20 +146,14 @@ def find_short_code_for_entry(entry):
     if sc:
         return str(sc).strip().upper()
 
-    # 2) Feed-provided short_code
-    sc = (first("short_code", "shortcode", "shortCode", "short") or "").strip()
-    if sc:
-        return sc.upper()
-
     # 3) Parse from GUID like "tdlbkgc-1"
     gid = (first("guid", "id") or "").strip()
     m = re.match(r"([a-z0-9_]+)-", gid, re.I)
     if m:
         return m.group(1).upper()
 
-    # 4) Give up
     return ""
-
+    
 def load_state():
     try:
         st = json.load(open(STATE_FILE, encoding="utf-8"))
