@@ -21,7 +21,6 @@ Behavior:
 
 Thread routing:
   - Thread IDs are resolved from thread_id_map.json using novel short_code.
-  - Optional fallback: <SHORTCODE>_THREAD_ID env var.
 
 Notes:
 - SHORTCODE is taken from HOSTING_SITE_DATA.novels[...]['short_code'] if present.
@@ -45,17 +44,12 @@ import time
 
 from novel_mappings import (
     HOSTING_SITE_DATA,
-    get_nsfw_novels,  # kept for parity; not used after removing ping header
 )
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 
 STATE_PATH     = "state.json"
 BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
-
-# kept for parity with original (not used after header removal)
-GLOBAL_ROLE = "<@&1329502873503006842>"
-NSFW_ROLE   = "<@&1343352825811439616>"
 
 # Mistmint server id (to build follow-this-thread URL)
 MISTMINT_GUILD_ID = "1379303379221614702"
@@ -260,27 +254,12 @@ def clean_feed_description(raw_html: str) -> str:
     return text
 
 
-# kept for parity, though the ping header line was removed
-def build_ping_roles(novel_title: str, extra_ping_roles_value: str) -> str:
-    parts = []
-    if GLOBAL_ROLE:
-        parts.append(GLOBAL_ROLE.strip())
-    if extra_ping_roles_value:
-        parts.append(extra_ping_roles_value.strip())
-    if novel_title in get_nsfw_novels():
-        parts.append(NSFW_ROLE)
-    return " ".join(p for p in parts if p)
-
-
 # ─── Mistmint thread helpers (same principle as your other Mistmint scripts) ───
 
 def sanitize_shortcode_from_title(title: str) -> str:
     """Fallback SHORTCODE from title (A–Z/0–9 only)."""
     return re.sub(r"[^A-Z0-9]+", "_", (title or "").upper()).strip("_")
   
-
-def thread_env_key_for(short_code: str) -> str:
-    return f"{short_code}_THREAD_ID"
   
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
     short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
@@ -377,7 +356,6 @@ def load_novels_from_mapping():
                 "free_feed":        free_feed_url,
                 "custom_emoji":     details.get("custom_emoji", ""),
                 "discord_role_url": details.get("discord_role_url", ""),
-                "extra_ping_roles": details.get("extra_ping_roles", ""),
                 "short_code":       details.get("short_code", ""),
             })
     return novels
@@ -460,9 +438,6 @@ def main():
                 entry.get("published_parsed") or entry.get("updated_parsed"),
                 now_local
             )
-
-            # we keep build_ping_roles around for parity, but we no longer include it in content
-            # ping_line = build_ping_roles(novel_title, novel.get("extra_ping_roles",""))
 
             content_msg = build_launch_content(
                 title=novel_title,
