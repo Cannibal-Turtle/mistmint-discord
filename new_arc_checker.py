@@ -265,6 +265,48 @@ def resolve_thread_id(novel_title: str, details: dict) -> str | None:
     val = THREAD_ID_MAP.get(key)
     return str(val) if val else None
 
+def find_novel_by_short_code(short_code: str):
+    wanted = re.sub(r"[^A-Z0-9]+", "_", (short_code or "").upper())
+
+    for host, host_data in (HOSTING_SITE_DATA or {}).items():
+        if host != HOST_TARGET:
+            continue
+
+        for title, details in host_data.get("novels", {}).items():
+            raw_sc = (
+                (details.get("short_code") or "").strip()
+                or sanitize_shortcode_from_title(title)
+            )
+            key = re.sub(r"[^A-Z0-9]+", "_", raw_sc.upper())
+
+            if key == wanted:
+                return host, title, details
+
+    return None, None, None
+
+
+def process_arc_by_short_code(short_code: str, thread_id: str, announce: bool = True):
+    host, title, details = find_novel_by_short_code(short_code)
+
+    if not details:
+        print(f"⚠️ No novel mapping found for short_code='{short_code}'. Skipping arc check.")
+        return
+
+    if not details.get("free_feed") or not details.get("paid_feed"):
+        print(f"⚠️ Novel '{title}' does not have both feeds. Skipping arc check.")
+        return
+
+    novel = {
+        "novel_title":  title,
+        "host":         host,
+        "free_feed":    details["free_feed"],
+        "paid_feed":    details["paid_feed"],
+        "novel_link":   details.get("novel_url", ""),
+        "history_file": details.get("history_file", ""),
+    }
+
+    return process_arc(novel, thread_id, announce=announce)
+
 
 # === CORE ARC DETECTION ===
 
