@@ -12,8 +12,7 @@ import discord
 from discord import Embed
 from discord.ui import View, Button
 
-from novel_mappings import HOSTING_SITE_DATA
-from new_arc_checker import process_arc, resolve_thread_id
+from new_arc_checker import process_arc_by_short_code
 
 # ─── CONFIG (no fallback channel) ──────────────────────────────────────────────
 TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
@@ -24,7 +23,6 @@ SEEN_KEY = "paid_seen_guids"
 SEEN_CAP = 500
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
-NSFW_ROLE        = "<@&1402533039497805894>"
 
 THREAD_MAP_FILE = "thread_id_map.json"
 
@@ -114,7 +112,6 @@ async def ensure_thread_ready(thread_or_channel) -> bool:
     return True
 
 def find_short_code_for_entry(entry):
-    # helper to fetch the first present key, case-insensitive
     def first(*keys):
         for k in keys:
             v = entry.get(k)
@@ -125,33 +122,17 @@ def find_short_code_for_entry(entry):
                 return str(v)
         return ""
 
-    # 1) Feed-provided short_code — preferred now
     sc = (first("short_code", "shortcode", "shortCode", "short") or "").strip()
     if sc:
         return sc.upper()
 
-    host  = (first("host") or "").strip()
-    title = (first("title") or "").strip()
-
-    # 2) Mapping fallback
-    novels  = (HOSTING_SITE_DATA.get(host, {}) or {}).get("novels", {}) or {}
-    details = novels.get(title)
-    if not details:
-        for k, v in novels.items():
-            if k.casefold() == title.casefold():
-                details = v
-                break
-
-    sc = (details or {}).get("short_code")
-    if sc:
-        return str(sc).strip().upper()
-
-    # 3) Parse from GUID like "tdlbkgc-1"
     gid = (first("guid", "id") or "").strip()
     m = re.match(r"([a-z0-9_]+)-", gid, re.I)
     if m:
         return m.group(1).upper()
 
+    title = (first("title") or "").strip()
+    print(f"⚠️ No short_code found in feed for title='{title}' guid='{gid}'")
     return ""
     
 def load_state():
@@ -186,10 +167,6 @@ def _is_mistmint(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
     return host.lower() == HOST_NAME_TARGET.lower()
 
-def _is_nsfw(entry) -> bool:
-    cat = (entry.get("category") or entry.get("Category") or "").strip().upper()
-    return cat == "NSFW"
-
 def _thread_id_for(short_code):
     if not short_code:
         return None
@@ -219,33 +196,23 @@ def parse_custom_emoji(e: str):
     return None
 
 
-def get_coin_button_parts(host: str, novel_title: str, fallback_price: str, fallback_emoji: str = None):
+def get_coin_button_parts(fallback_price: str):
     label_text, emoji_obj = "", None
-    try:
-        host_block = HOSTING_SITE_DATA.get(host, {})
-        novels     = host_block.get("novels", {})
-        details    = novels.get(novel_title, {})
-        mapped_price = details.get("coin_price")
-        if mapped_price is not None:
-            label_text = str(mapped_price).strip()
-        mapped_emoji_raw = details.get("coin_emoji") or host_block.get("coin_emoji") or fallback_emoji or ""
-        emoji_obj = parse_custom_emoji(mapped_emoji_raw)
-    except Exception:
-        pass
 
     coin_text = (fallback_price or "").strip()
     if coin_text:
         m = re.match(r"^(?P<emoji><a?:[A-Za-z0-9_]+:\d+>)?\s*(?P<num>\d+)?", coin_text)
         if m:
-            if not emoji_obj:
-                emoji_obj = parse_custom_emoji((m.group("emoji") or "").strip())
-            if not label_text:
-                num = (m.group("num") or "").strip()
-                if num: label_text = num
+            emoji_obj = parse_custom_emoji((m.group("emoji") or "").strip())
+            num = (m.group("num") or "").strip()
+            if num:
+                label_text = num
 
     if not label_text and not emoji_obj:
         label_text = "Read here"
+
     return label_text, emoji_obj
+    
 # ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -314,30 +281,13 @@ async def send_new_paid_entries():
 
             # ── ARC CHECK BEFORE SENDING PAID CHAPTER ──
             if is_arc_start_entry(entry):
-                novels  = (HOSTING_SITE_DATA.get(HOST_NAME_TARGET, {}) or {}).get("novels", {})
-                title_key = _norm(entry.get("title"))
-                details = novels.get(title_key)
-                
-                if not details:
-                    for k, v in novels.items():
-                        if k.casefold() == title_key.casefold():
-                            details = v
-                            break
+                thread_id_for_arc = _thread_id_for(short_code)
             
-                if details:
-                    thread_id_for_arc = _thread_id_for(short_code)
-            
-                    novel_obj = {
-                        "novel_title": _norm(entry.get("title")),
-                        "host": HOST_NAME_TARGET,
-                        "free_feed": details.get("free_feed"),
-                        "paid_feed": details.get("paid_feed"),
-                        "novel_link": details.get("novel_url", ""),
-                        "history_file": details.get("history_file", ""),
-                    }
-            
+                if thread_id_for_arc:
                     print(f"🌸 Arc start detected for {_norm(entry.get('title'))}")
-                    process_arc(novel_obj, thread_id_for_arc)
+                    process_arc_by_short_code(short_code, thread_id_for_arc)
+                else:
+                    print(f"⚠️ Arc start detected but no thread id for short_code='{short_code}'")
 
             thread_id = _thread_id_for(short_code)
             if not thread_id:
@@ -363,9 +313,8 @@ async def send_new_paid_entries():
                 print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
                 continue
 
-            # ── Build content (append NSFW role if category == NSFW)
+            # ── Build content
             title_text = _norm(entry.get("title"))
-            nsfw_tail  = NSFW_ROLE if _is_nsfw(entry) else ""
             content = (
                 f"<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293>\n"
                 f"<a:1366_sweetpiano_happy:1368136820965249034> **{title_text}** <:pink_lock:1368266294855733291>"
@@ -405,12 +354,7 @@ async def send_new_paid_entries():
 
             # ── Button (coin label/emoji if available)
             coin_label_raw = _norm(entry.get("coin"))
-            label_text, emoji_obj = get_coin_button_parts(
-                host=host,
-                novel_title=novel_title,
-                fallback_price=coin_label_raw,
-                fallback_emoji=None,
-            )
+            label_text, emoji_obj = get_coin_button_parts(coin_label_raw)
             btn = Button(label=label_text or "Read here", url=link, emoji=emoji_obj)
             view = View()
             view.add_item(btn)
