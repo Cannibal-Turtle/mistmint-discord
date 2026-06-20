@@ -423,7 +423,6 @@ def load_novels() -> list[dict]:
 
             novels.append({
                 "novel_title":      title,
-                "role_mention":     details.get("discord_role_id", ""),
                 "host":             host,
                 "novel_link":       details.get("novel_url", ""),
                 "chapter_count":    details.get("chapter_count", ""),
