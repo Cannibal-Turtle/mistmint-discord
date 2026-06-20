@@ -9,8 +9,6 @@ import discord
 from discord import Embed, AllowedMentions
 from discord.ui import View, Button
 
-from novel_mappings import HOSTING_SITE_DATA  # ← used for fallback short_code
-
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "state_rss.json"
@@ -65,13 +63,6 @@ def _is_mistmint(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
     return host.lower() == HOST_NAME_TARGET.lower()
 
-NOVEL_SC = {}
-for host, h in HOSTING_SITE_DATA.items():
-    for title, details in h.get("novels", {}).items():
-        sc = (details.get("short_code") or "").strip()
-        if sc:
-            NOVEL_SC[(host.lower(), title)] = sc.upper()
-
 def find_short_code_for_entry(entry):
     def first(*keys):
         for k in keys:
@@ -83,20 +74,13 @@ def find_short_code_for_entry(entry):
                 return str(v)
         return ""
 
-    # 1) Feed-provided short_code — preferred now
     sc = (first("short_code", "shortcode", "shortCode", "short") or "").strip()
     if sc:
         return sc.upper()
 
-    # 2) Mapping fallback
-    host  = (first("host") or "").strip().lower()
     title = (first("title") or "").strip()
-
-    sc = NOVEL_SC.get((host, title), "")
-    if sc:
-        return sc.upper()
-
-    print(f"⚠️ No short_code found for host='{host}' title='{title}'. Check feed/mapping.")
+    guid = (first("guid", "id") or "").strip()
+    print(f"⚠️ No short_code found in feed for title='{title}' guid='{guid}'")
     return ""
 
 def _thread_id_for(short_code):
