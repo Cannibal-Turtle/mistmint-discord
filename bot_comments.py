@@ -12,7 +12,7 @@ else derived from the novel title: uppercase and non-alnum -> underscore.
 
 Env:
   DISCORD_BOT_TOKEN
-  USE_UNARCHIVE=1        # optional: PATCH unarchive threads if archived
+  USE_UNARCHIVE=1        # optional: PATCH unarchive s if archived
 
 State:
   Stores last processed guid in state_rss.json under comments_last_guid
@@ -81,15 +81,31 @@ def save_state(state):
 
 
 # ─── THREAD HELPERS ────────────────────────────────────────────────────────────
+def get_entry_short_code(entry) -> str:
+    for key in ("short_code", "shortcode", "shortCode", "short"):
+        v = entry.get(key)
+        if v:
+            return str(v).strip().upper()
+
+        v = entry.get(key.lower()) or entry.get(key.upper())
+        if v:
+            return str(v).strip().upper()
+
+    return ""
+  
 def sanitize_shortcode_from_title(title: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "_", (title or "").upper()).strip("_")
 
-def resolve_thread_id(novel_title: str) -> str | None:
+def resolve_thread_id(novel_title: str, short_code: str = "") -> str | None:
     host_data = (HOSTING_SITE_DATA or {}).get(HOST_TARGET, {})
     details   = host_data.get("novels", {}).get(novel_title, {}) or {}
 
-    # Shortcode from mappings, or derived from title
-    sc_raw = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
+    # Feed short_code first, then mapping fallback, then title fallback
+    sc_raw = (
+        (short_code or "").strip()
+        or (details.get("short_code") or "").strip()
+        or sanitize_shortcode_from_title(novel_title)
+    )
     sc_key = sc_raw.upper()
   
     thread_id = (THREAD_ID_MAP.get(sc_key) or THREAD_ID_MAP.get(sc_raw) or "").strip() or None
@@ -221,8 +237,8 @@ def main():
             print(f"↷ Skipping non-Mistmint host: {host}  ({novel_title})")
             continue
 
-        # Resolve thread for this novel (SHORTCODE env). If missing, skip and advance.
-        thread_id = resolve_thread_id(novel_title)
+        short_code = get_entry_short_code(entry)
+        thread_id = resolve_thread_id(novel_title, short_code)
         if not thread_id:
             continue
 
