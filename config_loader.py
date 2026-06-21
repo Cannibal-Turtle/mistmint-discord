@@ -14,39 +14,57 @@ def repo_path(relative_path: str | Path) -> Path:
     return path if path.is_absolute() else BASE_DIR / path
 
 
-def load_json(relative_path: str | Path, default: Any = None) -> Any:
+def load_json(relative_path: str | Path, *, required: bool = True, default: Any = None) -> Any:
     path = repo_path(relative_path)
 
     try:
         with path.open(encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
+        if required:
+            raise RuntimeError(f"Missing required config file: {relative_path}")
         print(f"❌ Missing {relative_path}; using default.")
     except json.JSONDecodeError as e:
+        if required:
+            raise RuntimeError(f"Invalid JSON in required config file {relative_path}: {e}")
         print(f"❌ Invalid JSON in {relative_path}: {e}; using default.")
 
     return {} if default is None else default
 
 
-SERVER = load_json("config/server.json", {})
-ROLES = load_json("config/roles.json", {})
-FEEDS = load_json("config/feeds.json", {})
-FILES = load_json("config/files.json", {})
+SERVER = load_json("config/server.json")
+FEEDS = load_json("config/feeds.json")
+FILES = load_json("config/files.json")
 
-THREAD_MAP_FILE = FILES.get("thread_map_file", "config/thread_id_map.json")
-THREAD_ID_MAP = load_json(THREAD_MAP_FILE, {})
+
+def require_value(source: dict, key: str, label: str) -> Any:
+    value = source.get(key)
+    if value in (None, ""):
+        raise RuntimeError(f"Missing required config value: {label}.{key}")
+    return value
+
+
+def require_server_value(key: str) -> Any:
+    return require_value(SERVER, key, "server")
+
+
+def require_feeds_value(key: str) -> Any:
+    return require_value(FEEDS, key, "feeds")
+
+
+def require_feed_value(feed_name: str, key: str) -> Any:
+    feed = FEEDS.get(feed_name)
+    if not isinstance(feed, dict):
+        raise RuntimeError(f"Missing required feed config: feeds.{feed_name}")
+    return require_value(feed, key, f"feeds.{feed_name}")
+
+
+def require_file_value(key: str) -> Any:
+    return require_value(FILES, key, "files")
 
 
 def server_value(key: str, default: Any = None) -> Any:
     return SERVER.get(key, default)
-
-
-def role_value(key: str, default: Any = None) -> Any:
-    return ROLES.get(key, default)
-
-
-def feed_value(feed_name: str, key: str, default: Any = None) -> Any:
-    return FEEDS.get(feed_name, {}).get(key, default)
 
 
 def file_value(key: str, default: Any = None) -> Any:
@@ -59,3 +77,7 @@ def env_bool(name: str, default: bool = False) -> bool:
         return default
 
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+THREAD_MAP_FILE = require_file_value("thread_map_file")
+THREAD_ID_MAP = load_json(THREAD_MAP_FILE, required=False, default={})
