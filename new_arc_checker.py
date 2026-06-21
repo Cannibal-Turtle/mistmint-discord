@@ -31,30 +31,27 @@ from novel_mappings import (
 )
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
-HOST_TARGET   = "Mistmint Haven"   # only handle Mistmint
-NSFW_ROLE_ID  = "<@&1343352825811439616>"  # detected but NOT mentioned
+from config_loader import (
+    THREAD_ID_MAP,
+    THREAD_MAP_FILE,
+    env_bool,
+    require_server_value,
+)
 
-# Only attempt PATCH /channels/{id} if the bot has Manage Threads
-USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
+BOT_TOKEN   = os.environ["DISCORD_BOT_TOKEN"]
+HOST_TARGET = require_server_value("host_target")
 
-THREAD_MAP_FILE = "thread_id_map.json"
-
-try:
-    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
-        THREAD_ID_MAP = json.load(f)
-except FileNotFoundError:
-    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
-    THREAD_ID_MAP = {}
-except json.JSONDecodeError as e:
-    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
-    THREAD_ID_MAP = {}
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
+DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 # ────────────────────────────────────────────────────────────────────────────────
 
 
 # === DISCORD SEND ===
 
-def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
+    if auto_archive_minutes is None:
+        auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
+      
     url = f"https://discord.com/api/v10/channels/{thread_id}"
     headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
     payload = {"archived": False}
@@ -120,7 +117,7 @@ def post_message(thread_id: str, content: str, embeds: list | None = None, suppr
         fixed = False
         if "archiv" in msg:
             if USE_UNARCHIVE:
-                fixed = unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
+                fixed = unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
             else:
                 print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching. Unlock it or grant Manage Threads.")
         if not fixed and (code in (50001, 50013) or "missing access" in msg):
@@ -522,7 +519,7 @@ def process_arc(novel, thread_id: str, announce: bool = True):
                 # Preflight: join; unarchive only when allowed
                 ensure_bot_in_thread(BOT_TOKEN, thread_id)
                 if USE_UNARCHIVE:
-                    unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=10080)
+                    unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
             
                 post_message(thread_id, content_header, suppress_embeds=True)
                 header_ok = True
