@@ -41,27 +41,22 @@ except Exception as e:
     HOSTING_SITE_DATA = {}
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-STATE_PATH     = "state.json"
+from config_loader import (
+    THREAD_ID_MAP,
+    THREAD_MAP_FILE,
+    env_bool,
+    require_file_value,
+    require_server_value,
+)
+
+STATE_PATH     = require_file_value("state_path")
 BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
-HOST_NAME_TARGET = "Mistmint Haven"  # Only post for this host
-COMPLETE_ROLE    = "<@&1329502614110474270>"  # kept for future if you ever add it back (not used in messages)
-GLOBAL_MENTION = "||@everyone||"
+HOST_NAME_TARGET = require_server_value("host_target")
+GLOBAL_MENTION   = require_server_value("global_mention")
 
-# Only attempt PATCH /channels/{id} when the bot has Manage Threads
-USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
-
-THREAD_MAP_FILE = "thread_id_map.json"
-
-try:
-    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
-        THREAD_ID_MAP = json.load(f)
-except FileNotFoundError:
-    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
-    THREAD_ID_MAP = {}
-except json.JSONDecodeError as e:
-    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
-    THREAD_ID_MAP = {}
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
+DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -129,7 +124,7 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
     # Preflight: join thread is always safe; unarchive only when allowed
     ensure_bot_in_thread(bot_token, channel_or_thread_id)
     if USE_UNARCHIVE:
-        unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+        unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
 
     r = _send()
 
@@ -144,7 +139,7 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
 
         recovered = False
         if "archiv" in msg and USE_UNARCHIVE:
-            recovered = unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+            recovered = unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
         
         # Always try to join if we still could not recover
         if not recovered and (code in (50001, 50013) or "missing access" in msg):
@@ -171,7 +166,10 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
         # Let caller’s try/except print useful diagnostics
         r.raise_for_status()
       
-def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
+    if auto_archive_minutes is None:
+        auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
+      
     url = f"https://discord.com/api/v10/channels/{thread_id}"
     headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
     payload = {"archived": False}
@@ -202,7 +200,7 @@ def safe_send_bot(bot_token: str, channel_or_thread_id: str, content: str) -> bo
         # one more gentle preflight (cheap idempotent calls)
         ensure_bot_in_thread(bot_token, channel_or_thread_id)
         if USE_UNARCHIVE:
-            unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=10080)
+            unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
         
         send_bot_message(bot_token, channel_or_thread_id, content)
         return True
