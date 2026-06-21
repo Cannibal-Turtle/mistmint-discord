@@ -216,7 +216,7 @@ def find_released_extras(paid_feed, raw_kw):
     pattern = re.compile(rf"(?i)\b{raw_kw}s?\b.*?(\d+)")
     seen = set()
     for e in paid_feed.entries:
-        for field in ("chaptername", "nameextend", "volume"):
+        for field in ("chapter", "chaptername", "volume"):
             val = e.get(field, "") or ""
             m = pattern.search(val)
             if m:
@@ -269,7 +269,7 @@ def process_extras(novel: dict):
     # If paid feed already contains the configured last_chapter, skip extras flow
     last_chap = novel.get("last_chapter", "")
     for e in paid_feed.entries:
-        chap = f"{(e.get('chaptername') or '')}{(e.get('nameextend') or '')}"
+        chap = f"{(e.get('chapter') or '')}{(e.get('chaptername') or '')}"
         if last_chap and last_chap in chap:
             print(f"→ skipping extras for {novel['novel_id']} — final chapter present in feed")
             return
