@@ -35,24 +35,20 @@ from novel_mappings import (
 )
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-STATE_PATH      = "state.json"
-HOST_TARGET     = "Mistmint Haven"
-BOT_TOKEN_ENV   = "DISCORD_BOT_TOKEN"
+from config_loader import (
+    THREAD_ID_MAP,
+    THREAD_MAP_FILE,
+    env_bool,
+    require_file_value,
+    require_server_value,
+)
 
-# Only attempt PATCH /channels/{id} if the bot has Manage Threads
-USE_UNARCHIVE   = os.getenv("USE_UNARCHIVE", "0") == "1"
+STATE_PATH    = require_file_value("state_path")
+HOST_TARGET   = require_server_value("host_target")
+BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 
-THREAD_MAP_FILE = "thread_id_map.json"
-
-try:
-    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
-        THREAD_ID_MAP = json.load(f)
-except FileNotFoundError:
-    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
-    THREAD_ID_MAP = {}
-except json.JSONDecodeError as e:
-    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
-    THREAD_ID_MAP = {}
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
+DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -73,7 +69,10 @@ def commit_state_update(path=STATE_PATH):
     except Exception as e:
         print(f"❌ Git commit/push for {path} failed: {e}")
       
-def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
+    if auto_archive_minutes is None:
+        auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
+      
     """Unarchive a thread so we can post. Needs MANAGE_THREADS."""
     url = f"https://discord.com/api/v10/channels/{thread_id}"
     headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
@@ -138,7 +137,7 @@ def send_bot_message(bot_token: str, thread_id: str, content: str):
         fixed = False
         if "archiv" in msg:
             if USE_UNARCHIVE:
-                fixed = unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
+                fixed = unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
             else:
                 print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching. Unlock it or grant Manage Threads.")
         if not fixed and (code in (50001, 50013) or "missing access" in msg):
@@ -389,7 +388,7 @@ def process_extras(novel: dict):
     
     ensure_bot_in_thread(bot_token, thread_id)
     if USE_UNARCHIVE:
-        unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=10080)
+        unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
     
     if safe_send_bot(bot_token, thread_id, msg):
         meta["last_extra_announced"] = current
