@@ -346,10 +346,15 @@ async def send_new_paid_entries():
             if chaptername:
                 embed.description = chaptername
 
-            embed.set_author(
-                name=f"{translator}˙ᵕ˙",
-                url=AUTHOR_URL
-            )
+            author_kwargs = {
+                "name": f"{translator}˙ᵕ˙"
+            }
+            
+            if AUTHOR_URL:
+                author_kwargs["url"] = AUTHOR_URL
+            
+            embed.set_author(**author_kwargs)
+
             if thumb_url:
                 embed.set_thumbnail(url=thumb_url)
             embed.set_footer(text=host, icon_url=host_logo)
