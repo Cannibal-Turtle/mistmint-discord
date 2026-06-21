@@ -1,0 +1,17 @@
+{
+  "free": {
+    "url": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+    "last_guid_key": "free_last_guid",
+    "seen_key": "free_seen_guids"
+  },
+  "paid": {
+    "url": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+    "last_guid_key": "paid_last_guid",
+    "seen_key": "paid_seen_guids"
+  },
+  "comments": {
+    "url": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+    "seen_key": "comments_seen_guids"
+  },
+  "seen_cap": 500
+}
