@@ -26,29 +26,34 @@ import requests
 import feedparser
 from dateutil import parser as dateparser
 
+# ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
-    FEEDS,
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
     env_bool,
-    feed_value,
-    file_value,
+    require_feed_value,
+    require_feeds_value,
+    require_file_value,
+    require_server_value,
     server_value,
 )
 
-# ─── CONFIG ─────────────────────────────────────────────────────────────────────
-BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
-STATE_FILE    = file_value("rss_state_path", "state_rss.json")
-RSS_URL       = feed_value("comments", "url")
-SEEN_KEY      = feed_value("comments", "seen_key", "comments_seen_guids")
-SEEN_CAP      = int(FEEDS.get("seen_cap", 500))
+BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
-HOST_TARGET   = server_value("host_target", "Mistmint Haven")
-USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
+STATE_FILE = require_file_value("rss_state_path")
+RSS_URL    = require_feed_value("comments", "url")
+SEEN_KEY   = require_feed_value("comments", "seen_key")
+SEEN_CAP   = int(require_feeds_value("seen_cap"))
+
+HOST_TARGET = require_server_value("host_target")
 
 PING_USER_ID = str(
     os.getenv("PING_USER_ID") or server_value("ping_user_id", "")
 ).strip()
+
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
+DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
+# ────────────────────────────────────────────────────────────────────────────────
 
 
 # ─── STATE ─────────────────────────────────────────────────────────────────────
