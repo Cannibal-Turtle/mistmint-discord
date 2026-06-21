@@ -10,31 +10,32 @@ from discord import Embed, AllowedMentions
 from discord.ui import View, Button
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
-STATE_FILE = "state_rss.json"
-FEED_KEY   = "free_last_guid"
-RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
+from config_loader import (
+    THREAD_ID_MAP,
+    THREAD_MAP_FILE,
+    env_bool,
+    require_feed_value,
+    require_feeds_value,
+    require_file_value,
+    require_server_value,
+)
 
-HOST_NAME_TARGET = "Mistmint Haven"
+TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
-AUTHOR_URL = "https://www.mistminthaven.com/account/@CannibalTurtle-5082"
+STATE_FILE = require_file_value("rss_state_path")
+FEED_KEY   = require_feed_value("free", "last_guid_key")
+RSS_URL    = require_feed_value("free", "url")
 
-GLOBAL_MENTION = "||@everyone||"
+HOST_NAME_TARGET = require_server_value("host_target")
+AUTHOR_URL       = require_server_value("author_url")
+GLOBAL_MENTION   = require_server_value("global_mention")
 
-SEEN_KEY = "free_seen_guids"
-SEEN_CAP = 500
+SEEN_KEY = require_feed_value("free", "seen_key")
+SEEN_CAP = int(require_feeds_value("seen_cap"))
 
-THREAD_MAP_FILE = "thread_id_map.json"
-
-try:
-    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
-        THREAD_ID_MAP = json.load(f)
-except FileNotFoundError:
-    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
-    THREAD_ID_MAP = {}
-except json.JSONDecodeError as e:
-    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
-    THREAD_ID_MAP = {}
+AUTO_ARCHIVE_ALLOWED = set(require_server_value("auto_archive_allowed"))
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
+DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 # ───────────────────────────────────────────────────────────────────────────────
 
 def load_state():
