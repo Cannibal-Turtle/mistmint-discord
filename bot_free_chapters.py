@@ -100,12 +100,10 @@ def _thread_id_for(short_code):
     except (TypeError, ValueError):
         return None
 
-AUTO_ARCHIVE_ALLOWED = {60, 1440, 4320, 10080}
 
-# Turn on later (e.g., set env USE_UNARCHIVE=1) when the bot has Manage Threads
-USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
-
-async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
+    if auto_archive_minutes is None:
+        auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
     """
     Make sure the thread is unarchived (and optionally unlocked) before sending.
     Requires the bot to have 'Manage Threads'. Falls back gracefully if the
@@ -168,7 +166,7 @@ async def ensure_thread_ready(thread_or_channel) -> bool:
             pass
         if USE_UNARCHIVE:
             return await ensure_unarchived(
-                thread_or_channel, unlock=True, auto_archive_minutes=10080
+                thread_or_channel, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES
             )
         return True
     return True
