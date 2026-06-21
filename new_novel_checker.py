@@ -417,11 +417,8 @@ def main():
             if entry_title != novel_title:
                 continue
 
-            chap_field = (
-                entry.get("chaptername")
-                or entry.get("chapter")
-                or ""
-            )
+            chap_field = entry.get("chapter") or ""
+          
             if not is_first_chapter_name(chap_field):
                 continue
 
