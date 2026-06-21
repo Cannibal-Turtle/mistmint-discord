@@ -245,8 +245,8 @@ async def send_new_entries():
             )
 
             # Embed
-            chaptername = _norm(entry.get("chaptername"))
-            nameextend  = _norm(entry.get("nameextend"))
+            chapter = _norm(entry.get("chapter"))
+            chaptername  = _norm(entry.get("chaptername"))
             link        = _norm(entry.get("link"))
             translator  = _norm(entry.get("translator"))
             host        = _norm(entry.get("host"))
@@ -258,14 +258,14 @@ async def send_new_entries():
                 ts = ts.replace(tzinfo=timezone.utc)
 
             embed = Embed(
-                title=f"<a:sun_clouds:1517425608143933470>**{chaptername}**",
+                title=f"<a:sun_clouds:1517425608143933470>**{chapter}**",
                 url=link,
                 timestamp=ts,
                 color=int("FFF9BF", 16),
             )
             
-            if nameextend:
-                embed.description = nameextend
+            if chaptername:
+                embed.description = chaptername
 
             embed.set_author(
                 name=f"{translator}˙ᵕ˙",
@@ -285,7 +285,7 @@ async def send_new_entries():
             state["free_last_guid"] = guid  # optional, but useful
             save_state(state)
 
-            print(f"📨 Sent: {chaptername} / {guid} → thread {thread_id}")
+            print(f"📨 Sent: {chapter} / {guid} → thread {thread_id}")
 
         await asyncio.sleep(1)
         await bot.close()
