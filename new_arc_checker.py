@@ -219,8 +219,8 @@ def deduplicate(lst):
             seen.add(x); out.append(x)
     return out
 
-def extract_arc_title(nameextend):
-    clean = (nameextend or "").strip("* ").strip()
+def extract_arc_title(chaptername):
+    clean = (chaptername or "").strip("* ").strip()
     clean = re.sub(r"(?:\s+001|\(1\)|\.\s*1)$", "", clean).strip()
     return clean
 
@@ -359,8 +359,8 @@ def process_arc(novel, thread_id: str, announce: bool = True):
             if (e.get("title") or "").strip() != current_title:
                 continue
             raw_vol    = (e.get("volume") or "").replace("\u00A0", " ").strip()
-            raw_extend = (e.get("nameextend") or "").replace("\u00A0", " ").strip()
-            raw_chap   = (e.get("chaptername") or "").replace("\u00A0", " ").strip()
+            raw_extend = (e.get("chaptername") or "").replace("\u00A0", " ").strip()
+            raw_chap   = (e.get("chapter") or "").replace("\u00A0", " ").strip()
             if not looks_like_arc_start(raw_vol, raw_chap, raw_extend):
                 continue
             if raw_vol:
