@@ -1,0 +1,6 @@
+{
+  "state_path": "state.json",
+  "rss_state_path": "state_rss.json",
+  "thread_map_file": "config/thread_id_map.json",
+  "arc_history_dir": "arc_history"
+}
