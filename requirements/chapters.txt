@@ -1,0 +1,5 @@
+discord.py
+feedparser
+python-dateutil
+requests
+git+https://github.com/Cannibal-Turtle/rss-feed.git@main
