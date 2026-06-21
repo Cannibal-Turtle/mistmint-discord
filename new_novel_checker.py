@@ -47,25 +47,19 @@ from novel_mappings import (
 )
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
+from config_loader import (
+    THREAD_ID_MAP,
+    THREAD_MAP_FILE,
+    require_file_value,
+    require_server_value,
+)
 
-STATE_PATH     = "state.json"
-BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
+STATE_PATH    = require_file_value("state_path")
+BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 
-# Mistmint server id (to build follow-this-thread URL)
-MISTMINT_GUILD_ID = "1379303379221614702"
-
-THREAD_MAP_FILE = "thread_id_map.json"
-
-try:
-    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
-        THREAD_ID_MAP = json.load(f)
-except FileNotFoundError:
-    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
-    THREAD_ID_MAP = {}
-except json.JSONDecodeError as e:
-    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
-    THREAD_ID_MAP = {}
-
+HOST_TARGET = require_server_value("host_target")
+MISTMINT_GUILD_ID = require_server_value("guild_id")
+DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 # ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -124,7 +118,10 @@ def parsed_time_to_aware(struct_t, fallback_now):
     except Exception:
         return fallback_now
 
-def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
+    if auto_archive_minutes is None:
+        auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
+      
     url = f"https://discord.com/api/v10/channels/{thread_id}"
     headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
     payload = {"archived": False}
@@ -381,7 +378,7 @@ def main():
     now_local = datetime.now(timezone.utc).astimezone()
 
     for novel in reversed(novels):
-        if novel["host"] != "Mistmint Haven":
+        if novel["host"] != HOST_TARGET:
             continue
         novel_title = novel["novel_title"]
         host_name   = novel["host"]
