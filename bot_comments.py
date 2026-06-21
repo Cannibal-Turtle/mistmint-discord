@@ -45,11 +45,9 @@ SEEN_CAP      = int(FEEDS.get("seen_cap", 500))
 HOST_TARGET   = server_value("host_target", "Mistmint Haven")
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 
-PING_USER_ID = os.getenv(
-    "PING_USER_ID",
-    str(server_value("ping_user_id", "603578473814032414"))
+PING_USER_ID = str(
+    os.getenv("PING_USER_ID") or server_value("ping_user_id", "")
 ).strip()
-
 
 # ─── STATE ─────────────────────────────────────────────────────────────────────
 def load_state():
