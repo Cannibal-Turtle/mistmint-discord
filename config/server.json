@@ -1,0 +1,12 @@
+{
+  "host_name": "Mistmint Haven",
+  "guild_id": "1379303379221614702",
+  "author_url": "https://www.mistminthaven.com/account/@CannibalTurtle-5082",
+  "state_file": "state.json",
+  "rss_state_file": "state_rss.json",
+  "thread_map_file": "config/thread_id_map.json",
+  "global_mention": "||@everyone||",
+  "complete_role": "<@&1329502614110474270>",
+  "nsfw_role_id": "<@&1343352825811439616>",
+  "ping_user_id": "603578473814032414"
+}
