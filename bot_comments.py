@@ -116,7 +116,10 @@ def resolve_thread_id(novel_title: str, short_code: str = "") -> str | None:
 
     return thread_id
 
-def unarchive_thread(thread_id: str, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+def unarchive_thread(thread_id: str, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
+    if auto_archive_minutes is None:
+        auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
+      
     """Unarchive a thread so we can post. Needs MANAGE_THREADS on the bot."""
     url = f"https://discord.com/api/v10/channels/{thread_id}"
     headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
@@ -162,7 +165,7 @@ def post_message(thread_id: str, content: str, embed: dict | None = None, allowe
     # Preflight: join thread; optional unarchive
     ensure_bot_in_thread(thread_id)
     if USE_UNARCHIVE:
-        unarchive_thread(thread_id, unlock=True, auto_archive_minutes=10080)
+        unarchive_thread(thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
 
     def _send():
         return requests.post(url, headers=headers, json=payload, timeout=20)
@@ -181,7 +184,7 @@ def post_message(thread_id: str, content: str, embed: dict | None = None, allowe
         fixed = False
         if "archiv" in msg:
             if USE_UNARCHIVE:
-                fixed = unarchive_thread(thread_id, unlock=True, auto_archive_minutes=10080)
+                fixed = unarchive_thread(thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
             else:
                 print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching.")
         if not fixed and (code in (50001, 50013) or "missing access" in msg):
