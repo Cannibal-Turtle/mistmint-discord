@@ -24,6 +24,8 @@ SEEN_CAP = 500
 
 HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
 
+AUTHOR_URL = "https://www.mistminthaven.com/account/@CannibalTurtle-5082"
+
 THREAD_MAP_FILE = "thread_id_map.json"
 
 try:
@@ -346,7 +348,7 @@ async def send_new_paid_entries():
 
             embed.set_author(
                 name=f"{translator}˙ᵕ˙",
-                url="https://www.mistminthaven.com/account/@CannibalTurtle-5082"
+                url=AUTHOR_URL
             )
             if thumb_url:
                 embed.set_thumbnail(url=thumb_url)
