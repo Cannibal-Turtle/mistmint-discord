@@ -14,11 +14,15 @@ TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "state_rss.json"
 FEED_KEY   = "free_last_guid"
 RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
+
 HOST_NAME_TARGET = "Mistmint Haven"
-SEEN_KEY = "free_seen_guids"
-SEEN_CAP = 500
+
+AUTHOR_URL = "https://www.mistminthaven.com/account/@CannibalTurtle-5082"
 
 GLOBAL_MENTION = "||@everyone||"
+
+SEEN_KEY = "free_seen_guids"
+SEEN_CAP = 500
 
 THREAD_MAP_FILE = "thread_id_map.json"
 
@@ -269,7 +273,7 @@ async def send_new_entries():
 
             embed.set_author(
                 name=f"{translator}˙ᵕ˙",
-                url="https://www.mistminthaven.com/account/@CannibalTurtle-5082"
+                url=AUTHOR_URL
             )
             if thumb_url:
                 embed.set_thumbnail(url=thumb_url)
