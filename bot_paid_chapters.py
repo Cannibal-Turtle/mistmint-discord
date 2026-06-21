@@ -15,36 +15,37 @@ from discord.ui import View, Button
 from new_arc_checker import process_arc_by_short_code
 
 # ─── CONFIG (no fallback channel) ──────────────────────────────────────────────
-TOKEN      = os.environ["DISCORD_BOT_TOKEN"]
-STATE_FILE = "state_rss.json"
-FEED_KEY   = "paid_last_guid"
-RSS_URL    = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
-SEEN_KEY = "paid_seen_guids"
-SEEN_CAP = 500
+from config_loader import (
+    THREAD_ID_MAP,
+    THREAD_MAP_FILE,
+    env_bool,
+    require_feed_value,
+    require_feeds_value,
+    require_file_value,
+    require_server_value,
+)
 
-HOST_NAME_TARGET = "Mistmint Haven"  # only post items from this host
+TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
-AUTHOR_URL = "https://www.mistminthaven.com/account/@CannibalTurtle-5082"
+STATE_FILE = require_file_value("rss_state_path")
+FEED_KEY   = require_feed_value("paid", "last_guid_key")
+RSS_URL    = require_feed_value("paid", "url")
 
-THREAD_MAP_FILE = "thread_id_map.json"
+SEEN_KEY = require_feed_value("paid", "seen_key")
+SEEN_CAP = int(require_feeds_value("seen_cap"))
 
-try:
-    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
-        THREAD_ID_MAP = json.load(f)
-except FileNotFoundError:
-    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
-    THREAD_ID_MAP = {}
-except json.JSONDecodeError as e:
-    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
-    THREAD_ID_MAP = {}
+HOST_NAME_TARGET = require_server_value("host_target")
+AUTHOR_URL       = require_server_value("author_url")
+
+AUTO_ARCHIVE_ALLOWED = set(require_server_value("auto_archive_allowed"))
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
+DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 # ───────────────────────────────────────────────────────────────────────────────
 
-AUTO_ARCHIVE_ALLOWED = {60, 1440, 4320, 10080}
 
-# Turn on later (e.g., set env USE_UNARCHIVE=1) when the bot has Manage Threads
-USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
-
-async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto_archive_minutes: int = 10080) -> bool:
+async def ensure_unarchived(thread: discord.Thread, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
+    if auto_archive_minutes is None:
+        auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
     """
     Make sure the thread is unarchived (and optionally unlocked) before sending.
     Requires the bot to have 'Manage Threads'. Falls back gracefully if the
@@ -108,7 +109,7 @@ async def ensure_thread_ready(thread_or_channel) -> bool:
             pass
         if USE_UNARCHIVE:
             return await ensure_unarchived(
-                thread_or_channel, unlock=True, auto_archive_minutes=10080
+                thread_or_channel, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES
             )
         return True
     return True
