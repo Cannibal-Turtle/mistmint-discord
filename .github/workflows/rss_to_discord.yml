@@ -34,8 +34,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install feedparser requests
-          pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/rss_dispatch.txt
 
       - name: Run Extra Checker
         env:
@@ -77,8 +77,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install feedparser requests python-dateutil
-          pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/rss_dispatch.txt
 
       - name: Run Paid Completion Checker
         env:
@@ -119,8 +119,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install feedparser requests python-dateutil
-          pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/rss_dispatch.txt
 
       - name: Run Free Completion Checker
         env:
@@ -161,8 +161,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install feedparser requests python-dateutil
-          pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main    
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/rss_dispatch.txt
 
       - name: Run New Launch Checker
         env:
