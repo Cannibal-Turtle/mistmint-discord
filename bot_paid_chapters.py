@@ -218,8 +218,8 @@ def get_coin_button_parts(fallback_price: str):
 
 def is_arc_start_entry(entry):
     raw_vol    = (entry.get("volume") or "").strip()
-    raw_extend = (entry.get("nameextend") or "").strip()
-    raw_chap   = (entry.get("chaptername") or "").strip()
+    raw_extend = (entry.get("chaptername") or "").strip()
+    raw_chap   = (entry.get("chapter") or "").strip()
 
     def is_new_marker(raw):
         if not raw:
@@ -322,8 +322,8 @@ async def send_new_paid_entries():
 
             # ── Embed
             novel_title = _norm(entry.get("title"))
-            chaptername = _norm(entry.get("chaptername"))
-            nameextend  = _norm(entry.get("nameextend"))
+            chapter = _norm(entry.get("chapter"))
+            chaptername  = _norm(entry.get("chaptername"))
             link        = _norm(entry.get("link"))
             translator  = _norm(entry.get("translator"))
             host        = _norm(entry.get("host"))
@@ -335,14 +335,14 @@ async def send_new_paid_entries():
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
 
             embed = Embed(
-                title=f"<a:moonandstars:1365569468629123184>**{chaptername}**",
+                title=f"<a:moonandstars:1365569468629123184>**{chapter}**",
                 url=link,
                 timestamp=timestamp,
                 color=int("A87676", 16),
             )
             
-            if nameextend:
-                embed.description = nameextend
+            if chaptername:
+                embed.description = chaptername
 
             embed.set_author(
                 name=f"{translator}˙ᵕ˙",
@@ -373,7 +373,7 @@ async def send_new_paid_entries():
                     print(f"⚠️ Send failed for {thread_id}: {e}")
                     continue
 
-            print(f"📨 Sent paid: {chaptername} / {guid} → thread {thread_id}")
+            print(f"📨 Sent paid: {chapter} / {guid} → thread {thread_id}")
             sent += 1
             
             state[SEEN_KEY].append(norm)
