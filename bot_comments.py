@@ -26,31 +26,29 @@ import requests
 import feedparser
 from dateutil import parser as dateparser
 
-# ─── CONFIG ────────────────────────────────────────────────────────────────────
+from config_loader import (
+    FEEDS,
+    THREAD_ID_MAP,
+    THREAD_MAP_FILE,
+    env_bool,
+    feed_value,
+    file_value,
+    server_value,
+)
+
 BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
-STATE_FILE    = "state_rss.json"
-RSS_URL       = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
-SEEN_KEY      = "comments_seen_guids"
-SEEN_CAP      = 500
+STATE_FILE    = file_value("rss_state_path", "state_rss.json")
+RSS_URL       = feed_value("comments", "url")
+SEEN_KEY      = feed_value("comments", "seen_key", "comments_seen_guids")
+SEEN_CAP      = int(FEEDS.get("seen_cap", 500))
 
-HOST_TARGET   = "Mistmint Haven"          # only post Mistmint comments
-USE_UNARCHIVE = os.getenv("USE_UNARCHIVE", "0") == "1"
+HOST_TARGET   = server_value("host_target", "Mistmint Haven")
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 
-# Hardcoded user to ping (your Discord USER id, not a role)
-PING_USER_ID = os.getenv("PING_USER_ID", "603578473814032414").strip()
-
-THREAD_MAP_FILE = "thread_id_map.json"
-
-try:
-    with open(THREAD_MAP_FILE, encoding="utf-8") as f:
-        THREAD_ID_MAP = json.load(f)
-except FileNotFoundError:
-    print(f"❌ Missing {THREAD_MAP_FILE}; no threads will be resolved.")
-    THREAD_ID_MAP = {}
-except json.JSONDecodeError as e:
-    print(f"❌ Invalid JSON in {THREAD_MAP_FILE}: {e}")
-    THREAD_ID_MAP = {}
-# ────────────────────────────────────────────────────────────────────────────────
+PING_USER_ID = os.getenv(
+    "PING_USER_ID",
+    str(server_value("ping_user_id", "603578473814032414"))
+).strip()
 
 
 # ─── STATE ─────────────────────────────────────────────────────────────────────
