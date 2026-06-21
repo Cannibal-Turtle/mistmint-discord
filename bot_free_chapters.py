@@ -275,8 +275,10 @@ async def send_new_entries():
                 "name": f"{translator}˙ᵕ˙"
             }
             
-            if AUTHOR_URL:
-                author_kwargs["url"] = AUTHOR_URL
+            author_url = globals().get("AUTHOR_URL", "").strip()
+            
+            if author_url:
+                author_kwargs["url"] = author_url
             
             embed.set_author(**author_kwargs)
 
