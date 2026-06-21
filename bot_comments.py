@@ -36,6 +36,7 @@ from config_loader import (
     server_value,
 )
 
+# ─── CONFIG ─────────────────────────────────────────────────────────────────────
 BOT_TOKEN     = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE    = file_value("rss_state_path", "state_rss.json")
 RSS_URL       = feed_value("comments", "url")
@@ -48,6 +49,7 @@ USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 PING_USER_ID = str(
     os.getenv("PING_USER_ID") or server_value("ping_user_id", "")
 ).strip()
+
 
 # ─── STATE ─────────────────────────────────────────────────────────────────────
 def load_state():
