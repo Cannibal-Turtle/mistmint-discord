@@ -77,7 +77,7 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
      - **Thread ID**: `1433327716937240626`
 
 3. **Add the thread ID to THREAD_ID_MAP (recommended):**
-   - Edit the existing [`thread_id_map.json`](https://github.com/Cannibal-Turtle/mistmint-discord/blob/main/thread_id_map.json)
+   - Edit the existing [`config/thread_id_map.json`](https://github.com/Cannibal-Turtle/mistmint-discord/blob/main/thread_id_map.json)
    - Append a new key:
 
      "NEWCODE": "123456789012345678"
@@ -158,7 +158,7 @@ python new_novel_checker.py --feed free
 
 When you add a Mistmint Haven novel, do **two** things:
 
-1) **Add to thread to `thread_id_map.json`**
+1) **Add to thread to `config/thread_id_map.json`**
    - Example:
 ```
 {
