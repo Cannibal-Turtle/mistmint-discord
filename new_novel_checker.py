@@ -328,7 +328,11 @@ def build_launch_embed(
         "description": f"<a:Bow:1365575505171976246> {desc_text}",
         "image": {"url": cover_url},
         "footer": {"text": host_name, "icon_url": host_logo_url},
-        "color": embed_color("new_novel", "AEC6CF"),
+        "color": embed_color(
+            "new_novel",
+            "AEC6CF",
+            short_code=short_code,
+        ),
         "timestamp": iso_timestamp,
     }
     return embed
