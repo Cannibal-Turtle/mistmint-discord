@@ -70,6 +70,26 @@ def server_value(key: str, default: Any = None) -> Any:
 
 def file_value(key: str, default: Any = None) -> Any:
     return FILES.get(key, default)
+    
+
+def embed_value(key: str, default: Any = None) -> Any:
+    return EMBEDS.get(key, default)
+
+
+def embed_color_hex(key: str, default: str) -> str:
+    colors = EMBEDS.get("colors", {})
+
+    if isinstance(colors, dict):
+        value = colors.get(key)
+    else:
+        value = None
+
+    value = value or EMBEDS.get(key) or default
+    return str(value).strip().lstrip("#")
+
+
+def embed_color(key: str, default: str) -> int:
+    return int(embed_color_hex(key, default), 16)
 
 
 def env_bool(name: str, default: bool = False) -> bool:
