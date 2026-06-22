@@ -18,7 +18,7 @@ from new_arc_checker import process_arc_by_short_code
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
-    embed_color,
+    resolve_embed_color,
     env_bool,
     require_feed_value,
     require_feeds_value,
@@ -342,7 +342,11 @@ async def send_new_paid_entries():
                 title=f"<a:moonandstars:1365569468629123184>**{chapter}**",
                 url=link,
                 timestamp=timestamp,
-                color=embed_color("paid_chapter", "A87676"),
+                color=resolve_embed_color(
+                    "paid_chapter",
+                    "A87676",
+                    short_code=short_code,
+                ),
             )
             
             if chaptername:
