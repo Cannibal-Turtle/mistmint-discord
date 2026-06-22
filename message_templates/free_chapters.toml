@@ -1,9 +1,10 @@
 mode = "classic"
 
-[allowed_mentions]
-parse = ["everyone", "users", "roles"]
 
 content = "<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {global_mention}\n<a:5037sweetpianoyay:1368138418487427102> **{title}** <:pink_unlock:1368266307824255026>"
+
+[allowed_mentions]
+parse = ["everyone", "users", "roles"]
 
 [[embeds]]
 title = "<a:sun_clouds:1517425608143933470>**{chapter}**"
