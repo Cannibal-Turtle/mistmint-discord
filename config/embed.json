@@ -1,0 +1,10 @@
+{
+  "colors": {
+    "free_chapter": "FFF9BF",
+    "paid_chapter": "A87676",
+    "comments": "F0C7A4",
+    "new_novel": "AEC6CF",
+    "arc_unlocked": "FFF9BF",
+    "arc_locked": "A87676"
+  }
+}
