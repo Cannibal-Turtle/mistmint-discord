@@ -9,15 +9,6 @@ per-novel threads (no fallback channel).
 Usage:
   python completed_novel_checker.py --feed paid
   python completed_novel_checker.py --feed free
-
-Env secrets (GitHub Actions → Repository secrets):
-  - DISCORD_BOT_TOKEN
-  - For each novel thread, set:  <SHORTCODE>_THREAD_ID  (e.g. TDLBKGC_THREAD_ID=1433788343954575562)
-
-Notes:
-  - Only novels with host == "Mistmint Haven" are considered.
-  - SHORTCODE is taken from HOSTING_SITE_DATA.novels[...]['short_code'] if present.
-    If missing, it is derived from the title: uppercase and non-alnum → underscore.
 """
 
 import argparse
@@ -25,20 +16,22 @@ import json
 import os
 import re
 import sys
+import time
+import subprocess
 from datetime import datetime
 
 import feedparser
-import time
-import subprocess
 import requests
 from dateutil.relativedelta import relativedelta
 
-# Try to load your mapping package from rss-feed repo
+from message_renderer import render_message, to_discord_api_payload
+
 try:
     from novel_mappings import HOSTING_SITE_DATA
 except Exception as e:
     print(f"⚠️ novel_mappings not available ({e}); using empty HOSTING_SITE_DATA.")
     HOSTING_SITE_DATA = {}
+  
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
@@ -100,9 +93,9 @@ def commit_state_update(path=STATE_PATH):
 
 
 # ─── DISCORD SENDER ────────────────────────────────────────────────────────────
-def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
+def send_bot_message(bot_token: str, channel_or_thread_id: str, message_payload: dict):
     """
-    POST message via bot token to the given channel/thread ID.
+    POST rendered TOML payload via bot token to the given channel/thread ID.
     Threads are also channels in Discord API, so same endpoint works.
     """
     url = f"https://discord.com/api/v10/channels/{channel_or_thread_id}/messages"
@@ -110,21 +103,21 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
         "Authorization": f"Bot {bot_token}",
         "Content-Type":  "application/json"
     }
-    payload = {
-        "content": content,
-        # Ping everyone in thread.
-        "allowed_mentions": {"parse": ["everyone"]},
-        # 4 = SUPPRESS_EMBEDS (keeps this as clean text wall)
-        "flags": 4
-    }
-  
+
+    payload = to_discord_api_payload(message_payload)
+
     def _send():
         return requests.post(url, headers=headers, json=payload, timeout=20)
 
     # Preflight: join thread is always safe; unarchive only when allowed
     ensure_bot_in_thread(bot_token, channel_or_thread_id)
     if USE_UNARCHIVE:
-        unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
+        unarchive_thread(
+            bot_token,
+            channel_or_thread_id,
+            unlock=True,
+            auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+        )
 
     r = _send()
 
@@ -134,14 +127,20 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
             body = r.json()
         except Exception:
             body = {"message": r.text}
-        msg  = (body.get("message") or "").lower()
+
+        msg = (body.get("message") or "").lower()
         code = body.get("code")
 
         recovered = False
+
         if "archiv" in msg and USE_UNARCHIVE:
-            recovered = unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
-        
-        # Always try to join if we still could not recover
+            recovered = unarchive_thread(
+                bot_token,
+                channel_or_thread_id,
+                unlock=True,
+                auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+            )
+
         if not recovered and (code in (50001, 50013) or "missing access" in msg):
             recovered = ensure_bot_in_thread(bot_token, channel_or_thread_id)
 
@@ -152,18 +151,27 @@ def send_bot_message(bot_token: str, channel_or_thread_id: str, content: str):
     # Rate limit: respect header, else body, then retry once
     if r.status_code == 429:
         wait = None
-        reset_after = r.headers.get("X-RateLimit-Reset-After") or r.headers.get("x-ratelimit-reset-after")
+        reset_after = (
+            r.headers.get("X-RateLimit-Reset-After")
+            or r.headers.get("x-ratelimit-reset-after")
+        )
+
         if reset_after:
-            try: wait = float(reset_after)
-            except (TypeError, ValueError): pass
+            try:
+                wait = float(reset_after)
+            except (TypeError, ValueError):
+                pass
+
         if wait is None:
-            try: wait = float(r.json().get("retry_after", 1.0))
-            except Exception: wait = 1.0
+            try:
+                wait = float(r.json().get("retry_after", 1.0))
+            except Exception:
+                wait = 1.0
+
         time.sleep(max(0.0, min(wait or 1.0, 5.0)))
         r = _send()
 
     if not r.ok:
-        # Let caller’s try/except print useful diagnostics
         r.raise_for_status()
       
 def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
@@ -195,15 +203,20 @@ def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
     except requests.RequestException:
         return False
 
-def safe_send_bot(bot_token: str, channel_or_thread_id: str, content: str) -> bool:
+def safe_send_bot(bot_token: str, channel_or_thread_id: str, message_payload: dict) -> bool:
     try:
-        # one more gentle preflight (cheap idempotent calls)
-        ensure_bot_in_thread(bot_token, channel_or_thread_id)
-        if USE_UNARCHIVE:
-            unarchive_thread(bot_token, channel_or_thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
-        
-        send_bot_message(bot_token, channel_or_thread_id, content)
+        send_bot_message(bot_token, channel_or_thread_id, message_payload)
         return True
+
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response else "?"
+        body   = e.response.text if e.response else ""
+        print(f"⚠️ Bot send failed ({status}) to {channel_or_thread_id}:\n{body}", file=sys.stderr)
+        return False
+    except requests.RequestException as e:
+        print(f"⚠️ Bot send error to {channel_or_thread_id}: {e}", file=sys.stderr)
+        return False
+      
     except requests.HTTPError as e:
         status = e.response.status_code if e.response else "?"
         body   = e.response.text if e.response else ""
@@ -265,10 +278,6 @@ def sanitize_shortcode_from_title(title: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "_", up).strip("_")
 
 
-def thread_env_key_for(short_code: str) -> str:
-    return f"{short_code}_THREAD_ID"
-
-
 def resolve_thread_id(novel_title: str, details: dict) -> str | None:
     short_code = (details.get("short_code") or "").strip() or sanitize_shortcode_from_title(novel_title)
     key = re.sub(r"[^A-Z0-9]+", "_", short_code.upper())
@@ -277,122 +286,36 @@ def resolve_thread_id(novel_title: str, details: dict) -> str | None:
     return str(val) if val else None
 
 
-# ─── MESSAGE BUILDERS (mentions/footer removed for Mistmint) ───────────────────
+def build_completion_context(novel, chap_field, chap_link, duration: str = "") -> dict:
+    return {
+        "global_mention": GLOBAL_MENTION,
+        "translator": novel.get("translator", ""),
+        "novel_title": novel.get("novel_title", ""),
+        "novel_link": novel.get("novel_link", ""),
+        "host": novel.get("host", ""),
+        "chapter_count": novel.get("chapter_count", "the entire series"),
+        "chapter_text": (chap_field or "").replace("\u00A0", " "),
+        "chapter_link": chap_link,
+        "duration": duration,
+    }
+
+
 def build_paid_completion(novel, chap_field, chap_link, duration: str):
-    translator  = novel.get("translator", "")
-    title       = novel.get("novel_title", "")
-    link        = novel.get("novel_link", "")
-    host        = novel.get("host", "")
-    count       = novel.get("chapter_count", "the entire series")
-    DIV         = "<:purple_divider1:1365652778957144165>"
-    divider_line = DIV * 10
+    variant = "paid_with_duration" if duration else "paid_no_duration"
+    ctx = build_completion_context(novel, chap_field, chap_link, duration)
+    return render_message("completed_novels", ctx, variant=variant)
 
-    chap_text = (chap_field or "").replace("\u00A0", " ")
-
-    if duration:
-        mid_line = (
-            f"After {duration} of updates, {title} is now fully translated with "
-            f"{count}! Thank you for coming on this journey and for your continued "
-            f"support <:turtle_plead:1365223487274352670> You can now visit {host} "
-            f"to binge all advance releases~*<a:Heart:1365575427724283944>"
-            f"<a:Paws:1365676154865979453>\n"
-        )
-    else:
-        mid_line = (
-            f"{title} is now fully translated with {count}! Thank you for coming "
-            f"on this journey and for your continued support "
-            f"<:turtle_plead:1365223487274352670> You can now visit {host} "
-            f"to binge all advance releases~*<a:Heart:1365575427724283944>"
-            f"<a:Paws:1365676154865979453>\n"
-        )
-
-    return (
-        f"{GLOBAL_MENTION}\n"
-        "## ꧁ᐟᐟ ◌ೄ⟢  Completion Announcement  :blueberries: ˚. ᵎᵎ˖ˎˊ-\n"
-        f"{divider_line}\n"
-        f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
-        f"<a:lalalts_bracket:1365693058905014313> — officially completed!*** "
-        f"<a:cowiggle:1368136766791483472><a:whitesparkles:1365569806966853664>\n\n"
-        f"*The last chapter, [{chap_text}]({chap_link}), has now been released. "
-        f"<a:turtle_hyper:1365223449827737630>\n"
-        f"{mid_line}"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
-        f"-# Check out other translated projects at [{translator}'s library](https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11) "
-        f"and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>"
-    )
 
 def build_free_completion(novel, chap_field, chap_link):
-    translator  = novel.get("translator", "")
-    title       = novel.get("novel_title", "")
-    link        = novel.get("novel_link", "")
-    host        = novel.get("host", "")
-    count       = novel.get("chapter_count", "the entire series")
-    DIV         = "<:purple_divider1:1365652778957144165>"
-    divider_line = DIV * 10
-
-    chap_text = (chap_field or "").replace("\u00A0", " ")
-
-    return (
-        f"{GLOBAL_MENTION}\n"
-        "## 𐔌  Announcing: Complete Series Unlocked ,, :cherries: — 𝝑𝝔  ꒱\n"
-        f"{divider_line}\n"
-        f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
-        f"<a:lalalts_bracket:1365693058905014313>— complete access granted!*** "
-        f"<a:cowiggle:1368136766791483472><a:whitesparkles:1365569806966853664>\n\n"
-        f"*All {count} has been unlocked and ready for you to binge—completely free!\n"
-        f"Thank you all for your amazing support "
-        f"<:green_turtle_heart:1365264636064305203>\n"
-        f"Head over to {host} to dive straight in~*"
-        f"<a:Heart:1365575427724283944><a:Paws:1365676154865979453>\n"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
-        f"-# Check out other translated projects at [{translator}'s library](https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11) "
-        f"and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>"
-    )
+    ctx = build_completion_context(novel, chap_field, chap_link)
+    return render_message("completed_novels", ctx, variant="free")
 
 
 def build_only_free_completion(novel, chap_field, chap_link, duration: str):
-    translator  = novel.get("translator", "")
-    title       = novel.get("novel_title", "")
-    link        = novel.get("novel_link", "")
-    host        = novel.get("host", "")
-    count       = novel.get("chapter_count", "the entire series")
-    DIV         = "<:purple_divider1:1365652778957144165>"
-    divider_line = DIV * 10
-
-    chap_text = (chap_field or "").replace("\u00A0", " ")
-
-    if duration:
-        mid_line = (
-            f"After {duration} of updates, {title} is now fully translated with "
-            f"{count}! Thank you for coming on this journey and for your continued "
-            f"support <:luv_turtle:365263712549736448> You can now visit {host} "
-            f"to binge on all the releases~*<a:Heart:1365575427724283944>"
-            f"<a:Paws:1365676154865979453>\n"
-        )
-    else:
-        mid_line = (
-            f"{title} is now fully translated with {count}! Thank you for coming "
-            f"on this journey and for your continued support "
-            f"<:luv_turtle:365263712549736448> You can now visit {host} "
-            f"to binge on all the releases~*<a:Heart:1365575427724283944>"
-            f"<a:Paws:1365676154865979453>\n"
-        )
-
-    return (
-        f"{GLOBAL_MENTION}\n"
-        "## ⁺‧ ༻•┈๑☽₊˚ ⌞Completion Announcement⋆ཋྀ ˚₊‧⁺ :kiwi: ∗༉‧₊˚\n"
-        f"{divider_line}\n"
-        f"***<a:kikilts_bracket:1365693072138174525>[{title}]({link})"
-        f"<a:lalalts_bracket:1365693058905014313> — officially completed!*** "
-        f"<a:cowiggle:1368136766791483472><a:whitesparkles:1365569806966853664>\n\n"
-        f"*The last chapter, [{chap_text}]({chap_link}), has now been released. "
-        f"<a:turtle_hyper:1365223449827737630>\n"
-        f"{mid_line}"
-        f"{'<:FF_Divider_Pink:1365575626194681936>' * 5}\n"
-        f"-# Check out other translated projects at [{translator}'s library](https://www.mistminthaven.com/account-library/d31417df-4167-4105-8905-5f5942bf4f11) "
-        f"and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>"
-    )
-
+    variant = "only_free_with_duration" if duration else "only_free_no_duration"
+    ctx = build_completion_context(novel, chap_field, chap_link, duration)
+    return render_message("completed_novels", ctx, variant=variant)
+  
 
 # ─── DATA LOAD ─────────────────────────────────────────────────────────────────
 def load_novels() -> list[dict]:
@@ -523,7 +446,7 @@ def main():
             
                 duration = get_duration(novel.get("start_date", ""), chap_date)
                 msg = build_only_free_completion(novel, chap_display, entry.link, duration)
-                print(f"→ Built message of {len(msg)} characters")
+                print(f"→ Built message of {len(msg.get('content', ''))} characters")
             
                 if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent only-free completion announcement for {novel_id} → thread {thread_id}")
@@ -545,7 +468,7 @@ def main():
             
                 duration = get_duration(novel.get("start_date", ""), chap_date)
                 msg = build_paid_completion(novel, chap_display, entry.link, duration)
-                print(f"→ Built message of {len(msg)} characters")
+                print(f"→ Built message of {len(msg.get('content', ''))} characters")
             
                 if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent paid-completion announcement for {novel_id} → thread {thread_id}")
@@ -566,7 +489,7 @@ def main():
                     break
             
                 msg = build_free_completion(novel, chap_display, entry.link)
-                print(f"→ Built message of {len(msg)} characters")
+                print(f"→ Built message of {len(msg.get('content', ''))} characters")
             
                 if safe_send_bot(bot_token, thread_id, msg):
                     print(f"✔️ Sent free-completion announcement for {novel_id} → thread {thread_id}")
