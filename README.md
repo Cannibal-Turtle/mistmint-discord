@@ -61,9 +61,7 @@ Minimal changes from your `discord-webhook` setup, but **posts to per‑novel th
        "start_date": "14/02/2025"                # DD/MM/YYYY (for duration calc)
        # Optional (not used in Mistmint messages, kept for compatibility):
        # "discord_role_id": "",
-       # "extra_ping_roles": "",
-       # "custom_emoji": "",
-       # "discord_role_url": ""
+       # "extra_ping_roles": ""
    }
    ```
 
