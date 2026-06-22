@@ -50,6 +50,7 @@ from novel_mappings import (
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
+    embed_color,
     require_file_value,
     require_server_value,
 )
@@ -327,7 +328,7 @@ def build_launch_embed(
         "description": f"<a:Bow:1365575505171976246> {desc_text}",
         "image": {"url": cover_url},
         "footer": {"text": host_name, "icon_url": host_logo_url},
-        "color": 0xAEC6CF,
+        "color": embed_color("new_novel", "AEC6CF"),
         "timestamp": iso_timestamp,
     }
     return embed
