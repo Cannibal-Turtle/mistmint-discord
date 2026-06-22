@@ -47,6 +47,7 @@ BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
 HOST_NAME_TARGET = require_server_value("host_target")
 GLOBAL_MENTION   = require_server_value("global_mention")
+AUTHOR_URL = require_server_value("author_url")
 
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
@@ -290,6 +291,7 @@ def build_completion_context(novel, chap_field, chap_link, duration: str = "") -
     return {
         "global_mention": GLOBAL_MENTION,
         "translator": novel.get("translator", ""),
+        "author_url": AUTHOR_URL,
         "novel_title": novel.get("novel_title", ""),
         "novel_link": novel.get("novel_link", ""),
         "host": novel.get("host", ""),
