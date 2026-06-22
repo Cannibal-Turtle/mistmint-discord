@@ -9,6 +9,9 @@ import discord
 from discord import Embed, AllowedMentions
 from discord.ui import View, Button
 
+from message_context import build_feed_context
+from message_renderer import render_message, to_discord_py_kwargs
+
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
     THREAD_ID_MAP,
@@ -241,59 +244,19 @@ async def send_new_entries():
                 print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
                 continue
 
-            # Content
-            title = _norm(entry.get("title"))
-            content = (
-                f"<a:HappyCloud:1365575487333859398> 𝐹𝓇𝑒𝑒 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293> {GLOBAL_MENTION}\n"
-                f"<a:5037sweetpianoyay:1368138418487427102> **{title}** <:pink_unlock:1368266307824255026>"
-            )
-
-            # Embed
-            chapter = _norm(entry.get("chapter"))
-            chaptername  = _norm(entry.get("chaptername"))
-            link        = _norm(entry.get("link"))
-            translator  = _norm(entry.get("translator"))
-            host        = _norm(entry.get("host"))
-            thumb_url   = (entry.get("featuredImage") or entry.get("featuredimage") or {}).get("url")
-            host_logo   = (entry.get("hostLogo") or entry.get("hostlogo") or {}).get("url")
-            pub_raw     = getattr(entry, "published", None)
-            ts          = dateparser.parse(pub_raw) if pub_raw else None
-            if ts and ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-
-            embed = Embed(
-                title=f"<a:sun_clouds:1517425608143933470>**{chapter}**",
-                url=link,
-                timestamp=ts,
-                color=embed_color(
-                    "free_chapter",
-                    "FFF9BF",
-                    short_code=short_code,
-                ),
-            )
+            ctx = build_feed_context(entry)
             
-            if chaptername:
-                embed.description = chaptername
-
-            author_kwargs = {
-                "name": f"{translator}˙ᵕ˙"
-            }
+            ctx.update({
+                "global_mention": GLOBAL_MENTION,
+                "chapter_author_url": AUTHOR_URL,
+            })
             
-            author_url = globals().get("AUTHOR_URL", "").strip()
+            payload = render_message("free_chapter", ctx)
+            kwargs = to_discord_py_kwargs(payload)
             
-            if author_url:
-                author_kwargs["url"] = author_url
+            await dest.send(**kwargs)
             
-            embed.set_author(**author_kwargs)
-
-            if thumb_url:
-                embed.set_thumbnail(url=thumb_url)
-            embed.set_footer(text=host, icon_url=host_logo)
-
-            view = View()
-            view.add_item(Button(label="Read here", url=link))
-            allowed = AllowedMentions(everyone=True, users=True, roles=True)
-            await dest.send(content=content, embed=embed, view=view, allowed_mentions=allowed)
+            chapter = ctx["chapter"]
 
             state[SEEN_KEY].append(norm)
             state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
