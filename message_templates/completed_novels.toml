@@ -13,7 +13,7 @@ After {duration} of updates, {novel_title} is now fully translated with {chapter
 '''
 
 [paid_with_duration.allowed_mentions]
-parse = ["everyone"]
+parse = ["everyone", "roles"]
 
 
 [paid_no_duration]
@@ -31,7 +31,7 @@ content = '''
 '''
 
 [paid_no_duration.allowed_mentions]
-parse = ["everyone"]
+parse = ["everyone", "roles"]
 
 
 [free]
@@ -50,7 +50,7 @@ Head over to {host} to dive straight in~*<a:Heart:1365575427724283944><a:Paws:13
 '''
 
 [free.allowed_mentions]
-parse = ["everyone"]
+parse = ["everyone", "roles"]
 
 
 [only_free_with_duration]
@@ -68,7 +68,7 @@ After {duration} of updates, {novel_title} is now fully translated with {chapter
 '''
 
 [only_free_with_duration.allowed_mentions]
-parse = ["everyone"]
+parse = ["everyone", "roles"]
 
 
 [only_free_no_duration]
@@ -86,4 +86,4 @@ content = '''
 '''
 
 [only_free_no_duration.allowed_mentions]
-parse = ["everyone"]
+parse = ["everyone", "roles"]
