@@ -1,3 +1,4 @@
 feedparser
 python-dateutil
 requests
+tomli>=2.0.1
