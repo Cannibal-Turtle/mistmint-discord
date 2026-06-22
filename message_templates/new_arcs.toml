@@ -9,7 +9,7 @@ content = '''
 '''
 
 [messages.allowed_mentions]
-parse = []
+parse = ["everyone", "users", "roles"]
 
 
 [[messages]]
