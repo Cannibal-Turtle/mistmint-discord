@@ -34,6 +34,7 @@ from novel_mappings import (
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
+    embed_color,
     env_bool,
     require_server_value,
 )
@@ -502,9 +503,15 @@ def process_arc(novel, thread_id: str, announce: bool = True):
         
             embed_unlocked = None
             if unlocked_md:
-                embed_unlocked = {"description": f"||{unlocked_md}||", "color": 0xFFF9BF}
+                embed_unlocked = {
+                    "description": f"||{unlocked_md}||",
+                    "color": embed_color("arc_unlocked", "FFF9BF"),
+                }
         
-            embed_locked = {"description": f"||{locked_md}||", "color": 0xA87676}
+            embed_locked = {
+                "description": f"||{locked_md}||",
+                "color": embed_color("arc_locked", "A87676"),
+            }
         
             footer_and_react = (
                 "╰───────────────────────┄ °❀\n"
