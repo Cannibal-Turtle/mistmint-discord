@@ -8,10 +8,26 @@ from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parent
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 
 def repo_path(relative_path: str | Path) -> Path:
     path = Path(relative_path)
     return path if path.is_absolute() else BASE_DIR / path
+    
+
+def load_toml(relative_path: str | Path, *, required: bool = True, default: Any = None) -> Any:
+    path = repo_path(relative_path)
+
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        if required:
+            raise RuntimeError(f"Missing required TOML config file: {relative_path}")
+        return {} if default is None else default
 
 
 def load_json(relative_path: str | Path, *, required: bool = True, default: Any = None) -> Any:
