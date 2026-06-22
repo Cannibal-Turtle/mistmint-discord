@@ -18,19 +18,22 @@ State:
   Stores last processed guid in state_rss.json under comments_last_guid
 """
 
+# -*- coding: utf-8 -*-
+
 import os
 import json
 import re
 import time
 import requests
 import feedparser
-from dateutil import parser as dateparser
+
+from message_context import build_feed_context
+from message_renderer import render_message, to_discord_api_payload
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
-    embed_color,
     env_bool,
     require_feed_value,
     require_feeds_value,
@@ -152,21 +155,25 @@ def ensure_bot_in_thread(thread_id: str) -> bool:
     except requests.RequestException:
         return False
 
-def post_message(thread_id: str, content: str, embed: dict | None = None, allowed_mentions: dict | None = None):
-    """POST to thread with one-shot recovery for archived/missing access + 429 backoff."""
+def post_payload(thread_id: str, payload: dict):
+    """POST rendered template payload to thread with recovery for archived/missing access + 429 backoff."""
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
     headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
-    payload = {
-        "content": content or "",
-        "allowed_mentions": allowed_mentions if allowed_mentions is not None else {"parse": []}
-    }
-    if embed:
-        payload["embeds"] = [embed]
+
+    payload = dict(payload)
+
+    if "allowed_mentions" not in payload:
+        payload["allowed_mentions"] = {"parse": []}
 
     # Preflight: join thread; optional unarchive
     ensure_bot_in_thread(thread_id)
+
     if USE_UNARCHIVE:
-        unarchive_thread(thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
+        unarchive_thread(
+            thread_id,
+            unlock=True,
+            auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+        )
 
     def _send():
         return requests.post(url, headers=headers, json=payload, timeout=20)
@@ -179,15 +186,22 @@ def post_message(thread_id: str, content: str, embed: dict | None = None, allowe
             body = r.json()
         except Exception:
             body = {"message": r.text}
-        msg  = (body.get("message") or "").lower()
+
+        msg = (body.get("message") or "").lower()
         code = body.get("code")
 
         fixed = False
+
         if "archiv" in msg:
             if USE_UNARCHIVE:
-                fixed = unarchive_thread(thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
+                fixed = unarchive_thread(
+                    thread_id,
+                    unlock=True,
+                    auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+                )
             else:
                 print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching.")
+
         if not fixed and (code in (50001, 50013) or "missing access" in msg):
             fixed = ensure_bot_in_thread(thread_id)
 
@@ -195,21 +209,48 @@ def post_message(thread_id: str, content: str, embed: dict | None = None, allowe
             time.sleep(0.8)
             r = _send()
 
-    # 429 backoff: prefer header, fallback to body
+    # 429 backoff
     if r.status_code == 429:
-        reset_after = r.headers.get("X-RateLimit-Reset-After") or r.headers.get("x-ratelimit-reset-after")
+        reset_after = (
+            r.headers.get("X-RateLimit-Reset-After")
+            or r.headers.get("x-ratelimit-reset-after")
+        )
+
         try:
-            wait = float(reset_after) if reset_after is not None else float(r.json().get("retry_after", 1.0))
+            wait = (
+                float(reset_after)
+                if reset_after is not None
+                else float(r.json().get("retry_after", 1.0))
+            )
         except Exception:
             wait = 1.0
+
         time.sleep(min(max(wait, 0.0), 5.0))
         r = _send()
 
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
+
     r.raise_for_status()
     return r
 
+def build_comment_title(comment_txt: str, comment_image: str = "") -> str:
+    start_marker = "❛❛"
+    end_marker = "❜❜"
+    ellipsis = "..."
+
+    content_max = 256 - len(start_marker) - len(end_marker) - len(ellipsis)
+
+    if len(comment_txt) > content_max:
+        safe_comment = comment_txt[:content_max].rstrip() + ellipsis
+    else:
+        safe_comment = comment_txt
+
+    if comment_image and comment_txt == "Sticker comment":
+        return ""
+
+    return f"{start_marker}{safe_comment}{end_marker}"
+  
 
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
@@ -243,62 +284,34 @@ def main():
         if not thread_id:
             continue
 
-        author      = entry.get("author") or entry.get("dc_creator", "") or "anonymous"
-        chapter     = (entry.get("chapter") or "").strip()
-        comment_txt = (entry.get("description") or "").strip()
-        reply_chain = (entry.get("reply_chain") or "").strip()
-        host_logo   = (getattr(entry, "hostLogo", None) or getattr(entry, "hostlogo", None) or {}).get("url", "")
-        comment_image_obj = entry.get("commentImage") or entry.get("commentimage") or {}
-        comment_image = comment_image_obj.get("url", "").strip() if isinstance(comment_image_obj, dict) else ""
-        link        = (entry.get("link") or "").strip()
-        pubdate_raw = getattr(entry, "published", None)
-        timestamp   = dateparser.parse(pubdate_raw).isoformat() if pubdate_raw else None
-
-        # Build a safe <=256 title: ❛❛...❜❜ with ellipsis if needed
-        start_marker = "❛❛"
-        end_marker   = "❜❜"
-        ellipsis     = "..."
-        content_max  = 256 - len(start_marker) - len(end_marker) - len(ellipsis)
-        safe_comment = (comment_txt[:content_max].rstrip() + ellipsis) if len(comment_txt) > content_max else comment_txt
-        full_title   = "" if (comment_image and comment_txt == "Sticker comment") else f"{start_marker}{safe_comment}{end_marker}"
-
-        embed = {
-            "author": {
-                "name": f"comment by {author} 🕊️ {chapter}",
-                "url":  link
-            },
-            "timestamp": timestamp,
-            "color": embed_color(
-                color_key,
-                "F0C7A4",
-                short_code=short_code,
-            ),
-            "footer": {
-                "text":     host,
-                "icon_url": host_logo
-            }
-        }
+        ctx = build_feed_context(entry)
         
-        if full_title:
-            embed["title"] = full_title
-
-        if comment_image:
-            embed["image"] = {"url": comment_image}
-  
-        if reply_chain:
-            embed["description"] = reply_chain
-
-        # Build content; only add the " || " if we actually have a mention
+        # Preserve the old fallback behavior.
+        if not ctx["author"]:
+            ctx["author"] = "anonymous"
+        
+        comment_txt = ctx["description"]
+        comment_image = ctx["comment_image_url"]
+        
+        color_key = (
+            "novel_updates_comments"
+            if ctx["host"].strip().lower() == "novel updates"
+            else "comments"
+        )
+        
         user_mention = f"<@{PING_USER_ID}>" if PING_USER_ID else ""
-        content = f"<a:7977heartslike:1368146209981857792> New comment for **{novel_title}** <a:flowersandpetals:1444260426182295623>"
-        if user_mention:
-            content += f" ||{user_mention}||"
-
-        # Only allow your user mention to ping
-        allowed = {"parse": [], "users": [PING_USER_ID]} if PING_USER_ID else {"parse": []}
-
+        
+        ctx.update({
+            "comment_title": build_comment_title(comment_txt, comment_image),
+            "comment_color_key": color_key,
+            "comment_user_ping_tail": f" ||{user_mention}||" if user_mention else "",
+            "ping_user_id": PING_USER_ID,
+        })
+        
+        payload = to_discord_api_payload(render_message("comments", ctx))
+        
         try:
-            post_message(thread_id, content, embed, allowed_mentions=allowed)
+            post_payload(thread_id, payload)
             print(f"✅ Sent comment {guid} → thread {thread_id}")
             
             state[SEEN_KEY].append(norm)
