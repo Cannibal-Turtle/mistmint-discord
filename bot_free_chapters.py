@@ -2,12 +2,8 @@
 from discord.errors import Forbidden, HTTPException
 import os, re, json, asyncio
 import feedparser
-from datetime import timezone
-from dateutil import parser as dateparser
 
 import discord
-from discord import Embed, AllowedMentions
-from discord.ui import View, Button
 
 from message_context import build_feed_context
 from message_renderer import render_message, to_discord_py_kwargs
