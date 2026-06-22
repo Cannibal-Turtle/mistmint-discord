@@ -30,6 +30,7 @@ from dateutil import parser as dateparser
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
+    embed_color,
     env_bool,
     require_feed_value,
     require_feeds_value,
@@ -267,7 +268,7 @@ def main():
                 "url":  link
             },
             "timestamp": timestamp,
-            "color":     int("F0C7A4", 16),
+            "color":     embed_color("comments", "F0C7A4"),
             "footer": {
                 "text":     host,
                 "icon_url": host_logo
