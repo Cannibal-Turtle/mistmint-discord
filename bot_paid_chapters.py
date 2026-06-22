@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
-from discord.errors import Forbidden, HTTPException, NotFound
+from discord.errors import Forbidden, HTTPException
 import os
 import re
 import json
 import asyncio
-from datetime import datetime, timezone
 import feedparser
 
 import discord
 
-from new_arc_checker import process_arc_by_short_code
 from message_context import build_feed_context
 from message_renderer import render_message, to_discord_py_kwargs
 
