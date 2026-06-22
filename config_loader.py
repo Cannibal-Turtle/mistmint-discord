@@ -35,6 +35,7 @@ def load_json(relative_path: str | Path, *, required: bool = True, default: Any 
 SERVER = load_json("config/server.json")
 FEEDS = load_json("config/feeds.json")
 FILES = load_json("config/files.json")
+EMBEDS = load_json("config/embeds.json", required=False, default={})
 
 
 def require_value(source: dict, key: str, label: str) -> Any:
