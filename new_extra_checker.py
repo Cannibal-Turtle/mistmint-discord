@@ -28,13 +28,8 @@ import requests
 import feedparser
 import time
 import subprocess
-
 from message_renderer import render_message, to_discord_api_payload
-
-from novel_mappings import (
-    HOSTING_SITE_DATA,
-    get_nsfw_novels,  # kept for parity; not used after removing ping header
-)
+from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
@@ -296,17 +291,13 @@ def process_extras(novel: dict):
         print(f"→ skipping extras for {novel_id} — already completed (state.json)")
         return
 
-    # 3) NSFW log (no pings)
-    is_nsfw = (novel["novel_title"] in get_nsfw_novels())
-    print(f"🕵️ is_nsfw={is_nsfw} for {novel['novel_title']}")
-
-    # 4) see what actually dropped
+    # 3) see what actually dropped
     dropped_extras = find_released_extras(paid_feed, "extra")
     dropped_ss     = find_released_extras(paid_feed, "side story")
     max_ex = max(dropped_extras) if dropped_extras else 0
     max_ss = max(dropped_ss)     if dropped_ss     else 0
 
-    # 5) only announce when something new appears; cap to one lifetime send
+    # 4) only announce when something new appears; cap to one lifetime send
     if meta.get("extra_announced"):
         print(f"→ extras already announced for {novel_id}; skipping")
         return
@@ -435,7 +426,7 @@ if __name__ == "__main__":
                 "last_chapter":  d.get("last_chapter",""),
                 "host":          host,
                 "novel_link":    d.get("novel_url",""),
-                "short_code":    d.get("short_code",""),
+                "short_code":    (d.get("short_code", "") or "").strip().upper(),
             })
 
     for novel in reversed(novels):
