@@ -6,19 +6,17 @@ import json
 import asyncio
 from datetime import datetime, timezone
 import feedparser
-from dateutil import parser as dateparser
 
 import discord
-from discord import Embed
-from discord.ui import View, Button
 
 from new_arc_checker import process_arc_by_short_code
+from message_context import build_feed_context
+from message_renderer import render_message, to_discord_py_kwargs
 
 # ─── CONFIG (no fallback channel) ──────────────────────────────────────────────
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
-    embed_color,
     env_bool,
     require_feed_value,
     require_feeds_value,
@@ -317,77 +315,34 @@ async def send_new_paid_entries():
                 print(f"❌ Failed to prepare thread {thread_id} (join/unarchive). Skipping {guid}.")
                 continue
 
-            # ── Build content
-            title_text = _norm(entry.get("title"))
-            content = (
-                f"<a:Crown:1365575414550106154> 𝒫𝓇𝑒𝓂𝒾𝓊𝓂 𝒞𝒽𝒶𝓅𝓉𝑒𝓇 <a:TurtleDance:1365253970435510293>\n"
-                f"<a:1366_sweetpiano_happy:1368136820965249034> **{title_text}** <:pink_lock:1368266294855733291>"
-            )
-
-            # ── Embed
-            novel_title = _norm(entry.get("title"))
-            chapter = _norm(entry.get("chapter"))
-            chaptername  = _norm(entry.get("chaptername"))
-            link        = _norm(entry.get("link"))
-            translator  = _norm(entry.get("translator"))
-            host        = _norm(entry.get("host"))
-            thumb_url   = (entry.get("featuredImage") or entry.get("featuredimage") or {}).get("url")
-            host_logo   = (entry.get("hostLogo") or entry.get("hostlogo") or {}).get("url")
-            pub_raw     = getattr(entry, "published", None)
-            timestamp = dateparser.parse(pub_raw) if pub_raw else None
-            if timestamp and timestamp.tzinfo is None:
-                timestamp = timestamp.replace(tzinfo=timezone.utc)
-
-            embed = Embed(
-                title=f"<a:moonandstars:1365569468629123184>**{chapter}**",
-                url=link,
-                timestamp=timestamp,
-                color=embed_color(
-                    "paid_chapter",
-                    "A87676",
-                    short_code=short_code,
-                ),
-            )
+            ctx = build_feed_context(entry)
             
-            if chaptername:
-                embed.description = chaptername
-
-            author_kwargs = {
-                "name": f"{translator}˙ᵕ˙"
-            }
+            label_text, emoji_obj = get_coin_button_parts(ctx["coin"])
             
-            author_url = globals().get("AUTHOR_URL", "").strip()
+            ctx.update({
+                "chapter_author_url": AUTHOR_URL,
+                "button_label": label_text or "Read here",
+                "button_emoji": str(emoji_obj or ""),
+            })
             
-            if author_url:
-                author_kwargs["url"] = author_url
+            payload = render_message("paid_chapters", ctx)
+            kwargs = to_discord_py_kwargs(payload)
             
-            embed.set_author(**author_kwargs)
-
-            if thumb_url:
-                embed.set_thumbnail(url=thumb_url)
-            embed.set_footer(text=host, icon_url=host_logo)
-
-            # ── Button (coin label/emoji if available)
-            coin_label_raw = _norm(entry.get("coin"))
-            label_text, emoji_obj = get_coin_button_parts(coin_label_raw)
-            btn = Button(label=label_text or "Read here", url=link, emoji=emoji_obj)
-            view = View()
-            view.add_item(btn)
-
             # Send with one retry if we hit archived/membership bounce
             try:
-                await dest.send(content=content, embed=embed, view=view)
+                await dest.send(**kwargs)
             except HTTPException as e:
                 if isinstance(dest, discord.Thread) and e.status in (400, 403):
                     if await ensure_thread_ready(dest):
-                        await dest.send(content=content, embed=embed, view=view)
+                        await dest.send(**kwargs)
                     else:
                         print(f"⚠️ Send retry failed for {thread_id}: {e}")
                         continue
                 else:
                     print(f"⚠️ Send failed for {thread_id}: {e}")
                     continue
-
+            
+            chapter = ctx["chapter"]
             print(f"📨 Sent paid: {chapter} / {guid} → thread {thread_id}")
             sent += 1
             
