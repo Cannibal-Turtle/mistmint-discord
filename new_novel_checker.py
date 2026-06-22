@@ -42,6 +42,8 @@ from datetime import datetime, timezone
 import subprocess
 import time
 
+from message_renderer import render_message, to_discord_api_payload
+
 from novel_mappings import (
     HOSTING_SITE_DATA,
 )
@@ -50,7 +52,7 @@ from novel_mappings import (
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
-    embed_color,
+    env_bool,
     require_file_value,
     require_server_value,
 )
@@ -60,6 +62,8 @@ BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 
 HOST_TARGET = require_server_value("host_target")
 MISTMINT_GUILD_ID = require_server_value("guild_id")
+
+USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -146,68 +150,94 @@ def _ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
     except requests.RequestException:
         return False
 
-def send_bot_message_embed(bot_token: str, channel_or_thread_id: str, content: str, embed: dict):
+def send_bot_payload(bot_token: str, channel_or_thread_id: str, message_payload: dict):
     url = f"https://discord.com/api/v10/channels/{channel_or_thread_id}/messages"
-    headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
-    payload = {
-        "content": content or "",
-        "embeds": [embed],
-        # keep mentions flexible per your setup
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+        "Content-Type": "application/json",
     }
+
+    payload = to_discord_api_payload(message_payload)
 
     def _post():
         return requests.post(url, headers=headers, json=payload, timeout=20)
 
     r = _post()
 
-    # If archived/membership issues, try to join and post once more
+    # If archived/membership issues, try to fix once and post again.
     if r.status_code in (400, 403):
         body = {}
         try:
             body = r.json()
         except Exception:
-            pass
+            body = {"message": r.text}
+
         msg  = (body.get("message") or "").lower()
         code = body.get("code")
 
-        # If it's archived or missing access, try joining the thread (no PATCH)
-        if ("archiv" in msg) or ("missing access" in msg) or (code in (50001, 50013)):
-            _ensure_bot_in_thread(bot_token, channel_or_thread_id)
-            # small backoff
+        recovered = False
+
+        if "archiv" in msg:
+            if USE_UNARCHIVE:
+                recovered = unarchive_thread(
+                    bot_token,
+                    channel_or_thread_id,
+                    unlock=True,
+                    auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+                )
+            else:
+                print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching.")
+
+        if not recovered and (("missing access" in msg) or code in (50001, 50013)):
+            recovered = _ensure_bot_in_thread(bot_token, channel_or_thread_id)
+
+        if recovered:
             time.sleep(0.8)
             r = _post()
 
-    # Respect rate limit once
+    # Respect rate limit once.
     if r.status_code == 429:
         wait = None
         reset_after = r.headers.get("X-RateLimit-Reset-After")
+
         if reset_after:
-            try: wait = float(reset_after)
-            except (TypeError, ValueError): pass
+            try:
+                wait = float(reset_after)
+            except (TypeError, ValueError):
+                pass
+
         if wait is None:
-            try: wait = float(r.json().get("retry_after", 1.0))
-            except Exception: wait = 1.0
+            try:
+                wait = float(r.json().get("retry_after", 1.0))
+            except Exception:
+                wait = 1.0
+
         time.sleep(min(max(wait or 1.0, 0.0), 5.0))
         r = _post()
 
     if not r.ok:
         raise requests.HTTPError(f"{r.status_code} {r.text}", response=r)
 
-def safe_send_bot_embed(bot_token: str, channel_or_thread_id: str, content: str, embed: dict) -> bool:
+
+def safe_send_bot_payload(bot_token: str, channel_or_thread_id: str, message_payload: dict) -> bool:
     try:
-        send_bot_message_embed(bot_token, channel_or_thread_id, content, embed)
+        send_bot_payload(bot_token, channel_or_thread_id, message_payload)
         return True
+
     except requests.HTTPError as e:
         status = e.response.status_code if e.response else "?"
         body   = e.response.text if e.response else ""
         print(f"⚠️ Bot send failed ({status}): {body}", file=sys.stderr)
-        # Helpful hint if locked
+
         if "locked" in body.lower():
             print("ℹ️ Thread appears LOCKED. Unlock or grant the bot Manage Threads.", file=sys.stderr)
+
         return False
+
     except requests.RequestException as e:
         print(f"⚠️ Bot send error: {e}", file=sys.stderr)
         return False
+      
 
 def is_first_chapter_name(chapter_field: str) -> bool:
     if not chapter_field:
@@ -278,66 +308,6 @@ def build_thread_url(thread_id: str) -> str:
     return f"https://discord.com/channels/{MISTMINT_GUILD_ID}/{thread_id}"
 
 
-# ─── Content / Embed builders (minimal edits you asked for) ────────────────────
-
-def build_launch_content(
-    title: str,
-    novel_url: str,
-    chap_name: str,
-    chap_link: str,
-    host: str,
-    follow_thread_url: str,
-) -> str:
-    """
-    Minimal edits:
-    - REMOVED the first line that printed the ping_line + bow.
-    - REPLACED the CTA with the fixed wording pointing to the computed thread URL.
-    """
-    chap_display = chap_name.replace("\u00A0", " ").strip()
-
-    return (
-        # removed: f"{ping_line} <a:Bow:...>\n"
-        "## ꉂ`:fish_cake: ･ﾟ✧ New Series Launch ִֶָ. ..𓂃 ࣪ ִֶָ<a:1678whalepink:1368136879857205308>་༘࿐\n"
-        f"**<a:kikilts_bracket:1365693072138174525>[{title}]({novel_url})<a:lalalts_bracket:1365693058905014313>** — now officially added to cannibal turtle's lineup! <a:1620cupcakepink:1368136855903801404><a:Stars:1365568624466722816> \n\n"
-        f"***[{chap_display}]({chap_link})***, is out on {host}. "
-        "Please give lots of love to our new baby and welcome it to the server "
-        "<a:hellokittydance:1365566988826705960>\n"
-        "Updates will continue regularly, so hop in early and start reading now <a:2713pandaroll:1368137698212184136> \n"
-        f"{'<a:6535_flower_border:1368146360871948321>' * 10}\n"
-        f"-# To get notifications for new updates, open {follow_thread_url} and set the bell to **All Messages** <a:LoveLetter:1365575475841339435>"
-    )
-
-
-def build_launch_embed(
-    translator: str,
-    title: str,
-    novel_url: str,
-    desc_text: str,
-    cover_url: str,
-    host_name: str,
-    host_logo_url: str,
-    chap_dt_local: datetime
-) -> dict:
-    iso_timestamp = chap_dt_local.astimezone(timezone.utc).isoformat()
-    embed = {
-        "author": {
-            "name": f"{translator} ⋆. 𐙚"
-        },
-        "title": title,
-        "url": novel_url,
-        "description": f"<a:Bow:1365575505171976246> {desc_text}",
-        "image": {"url": cover_url},
-        "footer": {"text": host_name, "icon_url": host_logo_url},
-        "color": embed_color(
-            "new_novel",
-            "AEC6CF",
-            short_code=short_code,
-        ),
-        "timestamp": iso_timestamp,
-    }
-    return embed
-
-
 def load_novels_from_mapping():
     novels = []
     for host_name, host_data in HOSTING_SITE_DATA.items():
@@ -357,7 +327,7 @@ def load_novels_from_mapping():
                 "novel_url":        details.get("novel_url", ""),
                 "featured_image":   details.get("featured_image", ""),
                 "free_feed":        free_feed_url,
-                "short_code":       details.get("short_code", ""),
+                "short_code":       (details.get("short_code", "") or "").strip().upper(),
             })
     return novels
 
@@ -437,36 +407,40 @@ def main():
                 now_local
             )
 
-            content_msg = build_launch_content(
-                title=novel_title,
-                novel_url=novel.get("novel_url", ""),
-                chap_name=chap_field,
-                chap_link=chap_link,
-                host=host_name,
-                follow_thread_url=follow_url,
+            chap_display = chap_field.replace("\u00A0", " ").strip()
+            pub_date_iso = chap_dt_local.astimezone(timezone.utc).isoformat()
+
+            ctx = {
+                "title": novel_title,
+                "novel_title": novel_title,
+                "novel_url": novel.get("novel_url", ""),
+                "chapter": chap_display,
+                "chapter_link": chap_link,
+                "host": host_name,
+                "translator": novel.get("translator", ""),
+                "description": desc_text,
+                "featured_image_url": novel.get("featured_image", ""),
+                "host_logo_url": novel.get("host_logo", ""),
+                "pub_date_iso": pub_date_iso,
+                "short_code": novel.get("short_code", ""),
+                "follow_thread_url": follow_url,
+            }
+
+            message_payload = render_message("new_novels", ctx)
+
+            print(
+                f"→ Built launch message for {novel_title} "
+                f"({len(message_payload.get('content', ''))} chars + "
+                f"{len(message_payload.get('embeds', []))} embed)"
             )
 
-            embed_obj = build_launch_embed(
-                translator=novel.get("translator", ""),
-                title=novel_title,
-                novel_url=novel.get("novel_url", ""),
-                desc_text=desc_text,
-                cover_url=novel.get("featured_image", ""),
-                host_name=host_name,
-                host_logo_url=novel.get("host_logo", ""),
-                chap_dt_local=chap_dt_local
-            )
-
-            print(f"→ Built launch message for {novel_title} ({len(content_msg)} chars + 1 embed)")
-
-            # Ensure bot can post (join thread)
+            # Ensure bot can post by joining the thread.
             _ensure_bot_in_thread(bot_token, thread_id)
 
-            ok = safe_send_bot_embed(
+            ok = safe_send_bot_payload(
                 bot_token=bot_token,
                 channel_or_thread_id=thread_id,
-                content=content_msg,
-                embed=embed_obj
+                message_payload=message_payload,
             )
 
             if ok:
