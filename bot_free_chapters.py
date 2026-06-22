@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 from discord.errors import Forbidden, HTTPException
-import os
-import re
-import json
-import asyncio
+import os, re, json, asyncio
 import feedparser
 
 import discord
