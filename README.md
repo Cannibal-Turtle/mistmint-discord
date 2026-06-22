@@ -177,3 +177,23 @@ When you add a Mistmint Haven novel, do **two** things:
   a) the secret name in **Actions secrets**, and  
   b) the matching `env:` line in the workflow.
 
+---
+
+### Embed colors
+
+Embed colors are configured in `config/embeds.json`.
+
+Each color can use either a fixed hex code:
+
+```json
+"paid_chapter": "A87676"
+```
+
+or the novel’s default color from `rss-feed/mappings/novels/*.toml`:
+
+```json
+"paid_chapter": "novel"
+```
+
+When set to `"novel"`, the bot uses the novel’s `theme_color` or `discord_color` value. If no novel color is found, it falls back to the script’s default color.
+
