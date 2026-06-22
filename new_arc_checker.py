@@ -3,8 +3,8 @@
 """
 new_arc_checker.py (mistmint-discord)
 
-Detects new arcs/worlds and posts a 3-part announcement
-(header, Unlocked list if any, Locked list) into the *per-novel thread*.
+Detects new arcs/worlds and posts a TOML-rendered announcement sequence
+into the per-novel thread.
 
 Routing:
   For each novel, resolve a thread id from environment:
