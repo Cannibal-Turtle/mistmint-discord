@@ -13,7 +13,7 @@ from discord.ui import View, Button
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
-    embed_color,
+    resolve_embed_color,
     env_bool,
     require_feed_value,
     require_feeds_value,
@@ -265,7 +265,11 @@ async def send_new_entries():
                 title=f"<a:sun_clouds:1517425608143933470>**{chapter}**",
                 url=link,
                 timestamp=ts,
-                color=embed_color("free_chapter", "FFF9BF"),
+                color=resolve_embed_color(
+                    "free_chapter",
+                    "FFF9BF",
+                    short_code=short_code,
+                ),
             )
             
             if chaptername:
