@@ -428,7 +428,6 @@ def load_novels() -> list[dict]:
                 "start_date":       details.get("start_date", ""),
                 "free_feed":        free,
                 "paid_feed":        paid,
-                "discord_role_url": details.get("discord_role_url", ""),
                 "short_code":       details.get("short_code", ""),  # used for thread env
                 # per-novel override, else host-level default
                 "translator":       details.get("translator", host_translator),
