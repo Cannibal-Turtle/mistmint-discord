@@ -343,6 +343,7 @@ def load_novels_from_mapping():
             free_feed_url = details.get("free_feed")
             if not free_feed_url:
                 continue
+              
             novels.append({
                 "host":             host_name,
                 "translator":       translator,
@@ -351,8 +352,6 @@ def load_novels_from_mapping():
                 "novel_url":        details.get("novel_url", ""),
                 "featured_image":   details.get("featured_image", ""),
                 "free_feed":        free_feed_url,
-                "custom_emoji":     details.get("custom_emoji", ""),
-                "discord_role_url": details.get("discord_role_url", ""),
                 "short_code":       details.get("short_code", ""),
             })
     return novels
