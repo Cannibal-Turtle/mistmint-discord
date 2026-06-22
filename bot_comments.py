@@ -18,8 +18,6 @@ State:
   Stores last processed guid in state_rss.json under comments_last_guid
 """
 
-# -*- coding: utf-8 -*-
-
 import os
 import json
 import re
@@ -68,6 +66,7 @@ def load_state():
         st = {
             "free_last_guid": None,
             "paid_last_guid": None,
+            "comments_last_guid": None,
             SEEN_KEY: []
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
