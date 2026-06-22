@@ -29,6 +29,8 @@ import feedparser
 import time
 import subprocess
 
+from message_renderer import render_message, to_discord_api_payload
+
 from novel_mappings import (
     HOSTING_SITE_DATA,
     get_nsfw_novels,  # kept for parity; not used after removing ping header
@@ -107,15 +109,15 @@ def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
         return False
 
 
-def send_bot_message(bot_token: str, thread_id: str, content: str):
-    """POST to thread; auto-join on Missing Access and retry; simple 429 backoff."""
+def send_bot_payload(bot_token: str, thread_id: str, message_payload: dict):
+    """POST rendered TOML payload to thread; auto-join on Missing Access and retry; simple 429 backoff."""
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
     headers = {"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"}
-    payload = {
-        "content": content or "",
-        "allowed_mentions": {"parse": []},  # no pings for Mistmint
-        "flags": 4                           # suppress embeds for clean text
-    }
+
+    payload = to_discord_api_payload(message_payload)
+
+    if "allowed_mentions" not in payload:
+        payload["allowed_mentions"] = {"parse": []}
 
     # Preflight: join (idempotent)
     ensure_bot_in_thread(bot_token, thread_id)
@@ -131,15 +133,23 @@ def send_bot_message(bot_token: str, thread_id: str, content: str):
             body = r.json()
         except Exception:
             body = {"message": r.text}
+
         msg  = (body.get("message") or "").lower()
         code = body.get("code")
 
         fixed = False
+
         if "archiv" in msg:
             if USE_UNARCHIVE:
-                fixed = unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
+                fixed = unarchive_thread(
+                    bot_token,
+                    thread_id,
+                    unlock=True,
+                    auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+                )
             else:
                 print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching. Unlock it or grant Manage Threads.")
+
         if not fixed and (code in (50001, 50013) or "missing access" in msg):
             fixed = ensure_bot_in_thread(bot_token, thread_id)
 
@@ -147,42 +157,47 @@ def send_bot_message(bot_token: str, thread_id: str, content: str):
             time.sleep(0.8)
             r = _send()
 
-    # Rate limit backoff (prefer header; fallback to body)
+    # Rate limit backoff
     if r.status_code == 429:
         wait = None
         reset_after = r.headers.get("X-RateLimit-Reset-After") or r.headers.get("x-ratelimit-reset-after")
+
         if reset_after:
             try:
                 wait = float(reset_after)
             except (TypeError, ValueError):
                 wait = None
+
         if wait is None:
             try:
                 wait = float(r.json().get("retry_after", 1.0))
             except Exception:
                 wait = 1.0
+
         time.sleep(min(max(wait, 0.0), 5.0))
         r = _send()
 
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
         r.raise_for_status()
+
     return r
 
-def safe_send_bot(bot_token: str, thread_id: str, content: str) -> bool:
+def safe_send_bot_payload(bot_token: str, thread_id: str, message_payload: dict) -> bool:
     try:
-        send_bot_message(bot_token, thread_id, content)
+        send_bot_payload(bot_token, thread_id, message_payload)
         print(f"✅ Posted to thread {thread_id}")
         return True
+
     except requests.HTTPError as e:
         status = e.response.status_code if e.response else "?"
         body   = e.response.text if e.response else ""
         print(f"⚠️ Failed to send to {thread_id} ({status}): {body}", file=sys.stderr)
         return False
+
     except requests.RequestException as e:
         print(f"⚠️ Failed to send to {thread_id}: {e}", file=sys.stderr)
         return False
-
 
 # ─── STATE ─────────────────────────────────────────────────────────────────────
 def load_state(path=STATE_PATH):
@@ -369,32 +384,37 @@ def process_extras(novel: dict):
             f"<:turtle_cowboy2:1365266375274266695>"
         )
 
-    # assemble (NOTE: removed the line with base_mention | ONGOING_ROLE per your ask)
-    msg = (
-        f"## :lotus:<a:greensparklingstars:1365569873845157918>NEW {disp_label} JUST DROPPED"
-        f"<a:greensparklingstars:1365569873845157918>:lotus:\n"
-        f"{remaining}\n"
-        f"{cm} in {novel['host']}'s advance access today. "
-        f"Thanks for sticking with this one ‘til the end. It means a lot. "
-        f"Please show your final love and support by leaving comments on the site~ "
-        f"<:turtlelovefamily:1365266991690285156> :heart_hands:"
-    )
+    # render TOML message
+    ctx = {
+        "display_label": disp_label,
+        "remaining": remaining,
+        "drop_message": cm,
+        "host": novel["host"],
+        "short_code": novel.get("short_code", ""),
+    }
+
+    message_payload = render_message("new_extras", ctx)
 
     # ensure we can post before sending
     bot_token = os.getenv(BOT_TOKEN_ENV, "").strip()
     if not bot_token:
         print("❌ Missing DISCORD_BOT_TOKEN; cannot post")
         return
-    
+
     ensure_bot_in_thread(bot_token, thread_id)
     if USE_UNARCHIVE:
-        unarchive_thread(bot_token, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
-    
-    if safe_send_bot(bot_token, thread_id, msg):
+        unarchive_thread(
+            bot_token,
+            thread_id,
+            unlock=True,
+            auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+        )
+
+    if safe_send_bot_payload(bot_token, thread_id, message_payload):
         meta["last_extra_announced"] = current
         meta["extra_announced"]      = True
-    
-        save_state(state)   # state was loaded earlier in THIS function
+
+        save_state(state)
         commit_state_update(STATE_PATH)
 
 
