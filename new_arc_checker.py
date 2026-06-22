@@ -25,16 +25,13 @@ import re
 import sys
 import time
 
-from novel_mappings import (
-    HOSTING_SITE_DATA,
-    get_nsfw_novels,  # kept for parity; not used after removing ping header
-)
+from novel_mappings import HOSTING_SITE_DATA
+from message_renderer import render_message_sequence, to_discord_api_payload
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
-    embed_color,
     env_bool,
     require_server_value,
 )
@@ -86,41 +83,58 @@ def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
         return False
 
 
-def post_message(thread_id: str, content: str, embeds: list | None = None, suppress_embeds: bool = False):
+def post_payload(thread_id: str, message_payload: dict):
     url = f"https://discord.com/api/v10/channels/{thread_id}/messages"
-    headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
-    payload = {
-        "content": content or "",
-        "allowed_mentions": {"parse": []},  # no pings for Mistmint
+    headers = {
+        "Authorization": f"Bot {BOT_TOKEN}",
+        "Content-Type": "application/json",
     }
-    if embeds:
-        payload["embeds"] = embeds
-    if suppress_embeds:
-        payload["flags"] = 4
 
-    # Preflight: join thread (idempotent)
+    payload = to_discord_api_payload(message_payload)
+
+    # Mistmint arc should not ping unless TOML explicitly allows it.
+    if "allowed_mentions" not in payload:
+        payload["allowed_mentions"] = {"parse": []}
+
+    # Preflight: join thread.
     ensure_bot_in_thread(BOT_TOKEN, thread_id)
+
+    if USE_UNARCHIVE:
+        unarchive_thread(
+            BOT_TOKEN,
+            thread_id,
+            unlock=True,
+            auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+        )
 
     def _send():
         return requests.post(url, headers=headers, json=payload, timeout=20)
 
     r = _send()
 
-    # Single 400/403 handler (with USE_UNARCHIVE gate)
+    # Single 400/403 handler.
     if r.status_code in (400, 403):
         try:
             body = r.json()
         except Exception:
             body = {"message": r.text}
-        msg  = (body.get("message") or "").lower()
+
+        msg = (body.get("message") or "").lower()
         code = body.get("code")
 
         fixed = False
+
         if "archiv" in msg:
             if USE_UNARCHIVE:
-                fixed = unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
+                fixed = unarchive_thread(
+                    BOT_TOKEN,
+                    thread_id,
+                    unlock=True,
+                    auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES,
+                )
             else:
-                print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching. Unlock it or grant Manage Threads.")
+                print("ℹ️ Thread is archived and USE_UNARCHIVE=0; not patching.")
+
         if not fixed and (code in (50001, 50013) or "missing access" in msg):
             fixed = ensure_bot_in_thread(BOT_TOKEN, thread_id)
 
@@ -128,25 +142,32 @@ def post_message(thread_id: str, content: str, embeds: list | None = None, suppr
             time.sleep(0.8)
             r = _send()
 
-    # Handle rate limits (prefer header, fallback to body), then retry once
+    # Rate limit.
     if r.status_code == 429:
         wait = None
-        reset_after = r.headers.get("X-RateLimit-Reset-After") or r.headers.get("x-ratelimit-reset-after")
+        reset_after = (
+            r.headers.get("X-RateLimit-Reset-After")
+            or r.headers.get("x-ratelimit-reset-after")
+        )
+
         if reset_after:
             try:
                 wait = float(reset_after)
             except (TypeError, ValueError):
                 wait = None
+
         if wait is None:
             try:
                 wait = float(r.json().get("retry_after", 1.0))
             except Exception:
                 wait = 1.0
+
         time.sleep(max(0.0, min(wait, 5.0)))
         r = _send()
 
     if not r.ok:
         print(f"⚠️ Discord error {r.status_code}: {r.text}")
+
     r.raise_for_status()
     return r
   
@@ -296,6 +317,7 @@ def process_arc_by_short_code(short_code: str, thread_id: str, announce: bool = 
 
     novel = {
         "novel_title":  title,
+        "short_code":   (details.get("short_code", "") or "").strip().upper(),
         "host":         host,
         "free_feed":    details["free_feed"],
         "paid_feed":    details["paid_feed"],
@@ -312,16 +334,10 @@ def process_arc(novel, thread_id: str, announce: bool = True):
     print(f"\n=== Processing novel: {novel['novel_title']} → thread {thread_id} ===")
     history_changed = False
 
-    # 0. Fetch feeds
+    # 1. Fetch feeds
     free_feed = feedparser.parse(novel["free_feed"])
     paid_feed = feedparser.parse(novel["paid_feed"])
     print(f"🌐 Fetched: {len(free_feed.entries)} free, {len(paid_feed.entries)} paid")
-
-    # 1. NSFW (detected but not pinged)
-    is_nsfw = (
-        novel["novel_title"] in get_nsfw_novels()
-    )
-    print(f"🕵️ NSFW={is_nsfw}")
 
     # 2. Load history
     history_file = novel.get("history_file")
@@ -484,101 +500,50 @@ def process_arc(novel, thread_id: str, announce: bool = True):
     locked_md = "\n".join(locked_lines) if locked_lines else "None"
 
   
-    def post_arc_announcement():
-            # 4. Build messages (no pings, no role-react footer)
-            content_header = (
-                "## <a:announcement:1365566215975731274> NEW ARC ALERT"
-                "<a:pinksparkles:1365566023201198161>"
-                "<a:Butterfly:1365572264774471700>"
-                "<a:pinksparkles:1365566023201198161>\n"
-                f"***<:babypinkarrowleft:1365566594503147550>"
-                f"<:world_01:1368202193038999562>"
-                f"<:world_02:1368202204468613162> {world_emoji}"
-                f"<:babypinkarrowright:1365566635838275595>is Live for*** "
-                "<a:pinkloading:1365566815736172637>\n"
-                f"### [{novel['novel_title']}]({novel['novel_link']}) "
-                "<a:Turtle_Police:1365223650466205738>\n"
-                "❀° ┄───────────────────────╮"
-            )
-        
-            embed_unlocked = None
-            if unlocked_md:
-                embed_unlocked = {
-                    "description": f"||{unlocked_md}||",
-                    "color": embed_color(
-                        "arc_unlocked",
-                        "FFF9BF",
-                        short_code=novel.get("short_code", ""),
-                    )
-                }
-        
-            embed_locked = {
-                "description": f"||{locked_md if locked_md else 'None'}||",
-                "color": embed_color(
-                    "arc_locked",
-                    "A87676",
-                    short_code=novel.get("short_code", ""),
-                )
-            }
-        
-            footer_and_react = (
-                "╰───────────────────────┄ °❀\n"
-                f"> *Advance access is ready for you on {novel['host']}! "
-                "<a:holo_diamond:1365566087277711430>*\n"
-                + "<:pinkdiamond_border:1365575603734183936>" * 6
-            )
-        
-            # 5. Send to thread
-            header_ok = False
-            try:
-                # Preflight: join; unarchive only when allowed
-                ensure_bot_in_thread(BOT_TOKEN, thread_id)
-                if USE_UNARCHIVE:
-                    unarchive_thread(BOT_TOKEN, thread_id, unlock=True, auto_archive_minutes=DEFAULT_AUTO_ARCHIVE_MINUTES)
-            
-                post_message(thread_id, content_header, suppress_embeds=True)
+    # Build TOML context + rendered Discord message sequence.
+    arc_ctx = {
+        "novel_title": novel["novel_title"],
+        "novel_link": novel["novel_link"],
+        "host": novel["host"],
+        "short_code": novel.get("short_code", ""),
+        "world_emoji": world_emoji,
+        "unlocked_md": unlocked_md,
+        "locked_md": locked_md if locked_md else "None",
+        "has_unlocked": bool(unlocked_md),
+    }
+
+    arc_messages = render_message_sequence("new_arcs", arc_ctx)
+
+    # Send all Discord messages.
+    header_ok = False
+
+    for idx, message_payload in enumerate(arc_messages):
+        message_name = message_payload.get("name") or f"message {idx + 1}"
+
+        try:
+            post_payload(thread_id, message_payload)
+
+            if idx == 0:
                 header_ok = True
-                print(f"✅ Header sent: {new_full}")
-            except requests.RequestException as e:
-                print(f"⚠️ Header send failed: {e}", file=sys.stderr)
-        
-            if embed_unlocked:
-                try:
-                    post_message(thread_id, "<a:5693pinkwings:1368138669004820500> `Unlocked 🔓` <a:5046_bounce_pink:1368138460027813888>",
-                                 embeds=[embed_unlocked])
-                    print("✅ Unlocked embed sent")
-                except requests.RequestException as e:
-                    print(f"⚠️ Unlocked send failed: {e}", file=sys.stderr)
-            else:
-                print("ℹ️ No unlocked arcs block.")
-        
-            try:
-                post_message(thread_id, "<a:5693pinkwings:1368138669004820500> `Locked 🔐` <a:5046_bounce_pink:1368138460027813888>",
-                             embeds=[embed_locked])
-                print("✅ Locked embed sent")
-            except requests.RequestException as e:
-                print(f"⚠️ Locked send failed: {e}", file=sys.stderr)
-        
-            try:
-                post_message(thread_id, footer_and_react, suppress_embeds=True)
-                print("✅ Footer sent")
-            except requests.RequestException as e:
-                print(f"⚠️ Footer send failed: {e}", file=sys.stderr)
-        
-            # 6. Record announcement
-            if header_ok:
-                history["last_announced"] = new_full
-                save_history(history, history_file)
-                commit_history_update(history_file)
-                print(f"📌 Recorded last_announced = {new_full}")
-            else:
-                if history_changed:
-                    save_history(history, history_file)
-                    commit_history_update(history_file)
-                    print("📌 Saved history changes despite header failure (last_announced untouched).")
-                print("⚠️ Skipped updating last_announced because header failed.")
-              
-    post_arc_announcement()
+
+            print(f"✅ Arc {message_name} sent: {new_full}")
+
+        except requests.RequestException as e:
+            print(f"⚠️ Arc {message_name} send failed: {e}", file=sys.stderr)
+
+    # Record announcement.
+    if header_ok:
+        history["last_announced"] = new_full
+        save_history(history, history_file)
+        commit_history_update(history_file)
+        print(f"📌 Recorded last_announced = {new_full}")
+    else:
+        if history_changed:
+            save_history(history, history_file)
+            commit_history_update(history_file)
+            print("📌 Saved history changes despite header failure; last_announced untouched.")
+        print("⚠️ Skipped updating last_announced because header failed.")
+      
 
 # === LOAD & RUN ===
 if __name__ == "__main__":
@@ -603,6 +568,7 @@ if __name__ == "__main__":
 
             novel = {
                 "novel_title":      title,
+                "short_code":       (d.get("short_code", "") or "").strip().upper(),
                 "host":             host,
                 "free_feed":        d["free_feed"],
                 "paid_feed":        d["paid_feed"],
