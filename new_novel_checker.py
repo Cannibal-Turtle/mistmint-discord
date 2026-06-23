@@ -311,7 +311,6 @@ def build_thread_url(thread_id: str) -> str:
 def load_novels_from_mapping():
     novels = []
     for host_name, host_data in HOSTING_SITE_DATA.items():
-        translator   = host_data.get("translator", "")
         host_logo    = host_data.get("host_logo", "")
         novels_block = host_data.get("novels", {})
         for novel_title, details in novels_block.items():
@@ -321,7 +320,7 @@ def load_novels_from_mapping():
               
             novels.append({
                 "host":             host_name,
-                "translator":       translator,
+                "translator":       details.get("translator") or host_data.get("translator", ""),
                 "host_logo":        host_logo,
                 "novel_title":      novel_title,
                 "novel_url":        details.get("novel_url", ""),

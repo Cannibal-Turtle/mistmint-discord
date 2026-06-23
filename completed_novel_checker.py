@@ -355,7 +355,7 @@ def load_novels() -> list[dict]:
                 "paid_feed":        paid,
                 "short_code":       details.get("short_code", ""),  # used for thread env
                 # per-novel override, else host-level default
-                "translator":       details.get("translator", host_translator),
+                "translator":       details.get("translator") or host_translator,
             })
     return novels
 
