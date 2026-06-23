@@ -423,7 +423,10 @@ def process_arc(novel, thread_id: str, announce: bool = True):
                 print(f"🌿 Brand-new free arc: {full}")
 
     # paid side
-    seen_bases = [re.sub(r"^【Arc\s*\d+】", "", f) for f in (history["unlocked"] + history["locked"])]
+    seen_bases = [
+        re.sub(r"^【Arc\s*\d+】\s*", "", f).strip()
+        for f in (history["unlocked"] + history["locked"])
+    ]
     for base in paid_new:
         if base not in seen_bases:
             n = next_arc_number(history)
