@@ -225,7 +225,13 @@ def clean_feed_title(raw_title):
 
 def format_stored_title(title):
     m = re.match(r"(【Arc\s+\d+】)\s*(.*)", title or "")
-    return f"**{m.group(1)}**{m.group(2)}" if m else f"**{title}**"
+    if not m:
+        return f"**{title}**"
+
+    arc_label = m.group(1)
+    arc_name = m.group(2).strip()
+
+    return f"**{arc_label}** {arc_name}" if arc_name else f"**{arc_label}**"
 
 def extract_arc_number(title):
     m = re.search(r"【Arc\s*(\d+)】", title or "")
@@ -407,10 +413,10 @@ def process_arc(novel, thread_id: str, announce: bool = True):
                 print(f"🔓 Unlocked arc: {full}")
                 break
         if not matched_locked:
-            seen_bases = [re.sub(r"^【Arc\s*\d+】", "", t) for t in (history["unlocked"] + history["locked"])]
+            seen_bases = [re.sub(r"^【Arc\s*\d+】\s*", "", t).strip() for t in (history["unlocked"] + history["locked"])]
             if base not in seen_bases:
                 n = next_arc_number(history)
-                full = f"【Arc {n}】{base}"
+                full = f"【Arc {n}】 {base.strip()}"
                 history["unlocked"].append(full)
                 free_created = True
                 history_changed = True
@@ -421,7 +427,7 @@ def process_arc(novel, thread_id: str, announce: bool = True):
     for base in paid_new:
         if base not in seen_bases:
             n = next_arc_number(history)
-            full = f"【Arc {n}】{base}"
+            full = f"【Arc {n}】 {base.strip()}"
             history["locked"].append(full)
             paid_created = True
             history_changed = True
