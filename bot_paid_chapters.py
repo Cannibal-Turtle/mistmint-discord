@@ -285,7 +285,7 @@ async def send_new_paid_entries():
             
                 if thread_id_for_arc:
                     print(f"🌸 Arc start detected for {_norm(entry.get('title'))}")
-                    process_arc_by_short_code(short_code, thread_id_for_arc)
+                    await asyncio.to_thread(process_arc_by_short_code, short_code, thread_id_for_arc)
                 else:
                     print(f"⚠️ Arc start detected but no thread id for short_code='{short_code}'")
 
@@ -353,11 +353,23 @@ async def send_new_paid_entries():
         await bot.close()
 
     print("🔌 Connecting to Discord gateway…")
+
+    start_task = asyncio.create_task(bot.start(TOKEN))
+
     try:
-        await asyncio.wait_for(bot.start(TOKEN), timeout=30)
+        # Only timeout the actual "ready/connect" part.
+        await asyncio.wait_for(bot.wait_until_ready(), timeout=30)
     except asyncio.TimeoutError:
         print("❌ Gateway connect timed out — exiting cleanly")
+        await bot.close()
+        start_task.cancel()
         return
+
+    try:
+        # After connected, let on_ready finish its full work.
+        await start_task
+    except asyncio.CancelledError:
+        pass
 
 
 if __name__ == "__main__":
