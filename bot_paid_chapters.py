@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from discord.errors import Forbidden, HTTPException
+from discord.errors import Forbidden, HTTPException, NotFound
 import os
 import re
 import json
@@ -8,6 +8,7 @@ import feedparser
 
 import discord
 
+from new_arc_checker import process_arc_by_short_code
 from message_context import build_feed_context
 from message_renderer import render_message, to_discord_py_kwargs
 
@@ -352,24 +353,18 @@ async def send_new_paid_entries():
         await asyncio.sleep(1)
         await bot.close()
 
+
     print("🔌 Connecting to Discord gateway…")
 
-    start_task = asyncio.create_task(bot.start(TOKEN))
-
     try:
-        # Only timeout the actual "ready/connect" part.
-        await asyncio.wait_for(bot.wait_until_ready(), timeout=30)
+        # This runs until on_ready() finishes and calls bot.close().
+        # 300s prevents the workflow from hanging forever, but won't kill normal arc work.
+        await asyncio.wait_for(bot.start(TOKEN), timeout=300)
+
     except asyncio.TimeoutError:
-        print("❌ Gateway connect timed out — exiting cleanly")
-        await bot.close()
-        start_task.cancel()
-        return
-
-    try:
-        # After connected, let on_ready finish its full work.
-        await start_task
-    except asyncio.CancelledError:
-        pass
+        print("❌ Paid bot run timed out after 300s — exiting cleanly")
+        if not bot.is_closed():
+            await bot.close()
 
 
 if __name__ == "__main__":
