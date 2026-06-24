@@ -16,6 +16,7 @@ from config_loader import (
     env_bool,
     require_feed_value,
     require_feeds_value,
+    require_feed_url,
     require_file_value,
     require_server_value,
 )
@@ -24,7 +25,7 @@ TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 STATE_FILE = require_file_value("rss_state_path")
 FEED_KEY   = require_feed_value("free", "last_guid_key")
-RSS_URL    = require_feed_value("free", "url")
+RSS_URL    = require_feed_url("free")
 
 HOST_NAME_TARGET = require_server_value("host_target")
 AUTHOR_URL       = require_server_value("author_url")

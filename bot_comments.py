@@ -35,6 +35,7 @@ from config_loader import (
     env_bool,
     require_feed_value,
     require_feeds_value,
+    require_feed_url,
     require_file_value,
     require_server_value,
     server_value,
@@ -43,7 +44,7 @@ from config_loader import (
 BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 STATE_FILE = require_file_value("rss_state_path")
-RSS_URL    = require_feed_value("comments", "url")
+RSS_URL    = require_feed_url("comments")
 SEEN_KEY   = require_feed_value("comments", "seen_key")
 SEEN_CAP   = int(require_feeds_value("seen_cap"))
 

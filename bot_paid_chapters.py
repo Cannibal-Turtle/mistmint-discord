@@ -19,6 +19,7 @@ from config_loader import (
     env_bool,
     require_feed_value,
     require_feeds_value,
+    require_feed_url,
     require_file_value,
     require_server_value,
 )
@@ -27,7 +28,7 @@ TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 STATE_FILE = require_file_value("rss_state_path")
 FEED_KEY   = require_feed_value("paid", "last_guid_key")
-RSS_URL    = require_feed_value("paid", "url")
+RSS_URL    = require_feed_url("paid")
 
 SEEN_KEY = require_feed_value("paid", "seen_key")
 SEEN_CAP = int(require_feeds_value("seen_cap"))
