@@ -278,6 +278,54 @@ def clean_feed_description(raw_html: str) -> str:
     return text
 
 
+def format_site_genres(value) -> str:
+    """Normalize a host-specific TOML genre value for Discord display."""
+    if not value:
+        return ""
+
+    if isinstance(value, str):
+        # Accept either "Horror, Yaoi" or a single plain string.
+        raw_items = re.split(r",\s*", value)
+    elif isinstance(value, (list, tuple, set)):
+        raw_items = list(value)
+    else:
+        raw_items = [value]
+
+    genres: list[str] = []
+    seen: set[str] = set()
+
+    for item in raw_items:
+        if isinstance(item, dict):
+            item = item.get("name", "")
+
+        genre = str(item or "").strip()
+        if not genre:
+            continue
+
+        key = genre.casefold()
+        if key in seen:
+            continue
+
+        seen.add(key)
+        genres.append(genre)
+
+    return ", ".join(genres)
+
+
+def get_site_genre(details: dict) -> str:
+    """
+    Return site-native genres from novel TOML, with generic names preferred.
+
+    rss-feed currently writes Mistmint Haven's full genre list as
+    mistmint_haven_genres. If later you rename that to site_genres/site_genre,
+    this Discord repo will already pick it up.
+    """
+    return format_site_genres(
+        details.get("site_genres")
+        or details.get("genres")
+    )
+
+
 # ──────────────────────── Thread helpers ────────────────────────
 
 def sanitize_shortcode_from_title(title: str) -> str:
@@ -346,6 +394,7 @@ def load_novels_from_mapping():
                 "featured_image":   details.get("featured_image", ""),
                 "free_feed":        free_feed_url,
                 "short_code":       (details.get("short_code", "") or "").strip().upper(),
+                "site_genre":       get_site_genre(details),
             })
     return novels
 
@@ -442,6 +491,12 @@ def main():
                 "pub_date_iso": pub_date_iso,
                 "short_code": novel.get("short_code", ""),
                 "follow_thread_url": follow_url,
+                "site_genre": novel.get("site_genre", ""),
+                "site_genre_block": (
+                    f"Genres: {novel.get('site_genre', '')}\n\n"
+                    if novel.get("site_genre", "")
+                    else ""
+                ),
             }
 
             message_payload = render_message("new_novels", ctx)
