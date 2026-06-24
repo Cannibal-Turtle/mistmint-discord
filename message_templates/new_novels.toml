@@ -16,7 +16,7 @@ parse = ["everyone", "users", "roles"]
 [[embeds]]
 title = "{title}"
 url = "{novel_url}"
-description = "<a:Bow:1365575505171976246> {description}"
+description = "{site_genre_block}<a:Bow:1365575505171976246> {description}"
 timestamp = "{pub_date_iso}"
 color = { key = "new_novel", default = "AEC6CF" }
 
