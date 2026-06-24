@@ -2,15 +2,15 @@
 
 Mistmint-specific Discord bot scripts for posting novel updates into **per-novel Discord threads**.
 
-This repo is similar to `discord-webhook`, but the target is only:
+This repo is similar to `discord-webhook`, but it filters announcements to:
 
-```text id="or3286"
+```text
 host == "Mistmint Haven"
 ```
 
-and announcements are routed to each novel’s own thread using:
+and routes normal announcements to each novel’s own Discord thread using:
 
-```text id="2tnct3"
+```text
 config/thread_id_map.json
 ```
 
@@ -18,15 +18,15 @@ config/thread_id_map.json
 
 ## What This Repo Does
 
-This repo uses novel metadata from:
+This repo uses novel metadata from the `rss-feed` package:
 
-```python id="8du2la"
+```python
 from novel_mappings import HOSTING_SITE_DATA
 ```
 
-The actual novel data lives in the `rss-feed` repo under split TOML mapping files:
+The actual novel data lives in `rss-feed` under split TOML mapping files:
 
-```text id="dk0iyx"
+```text
 rss-feed/
 ├─ novel_mappings.py
 └─ mappings/
@@ -40,15 +40,15 @@ rss-feed/
       └─ ...
 ```
 
-Depending on which scripts are included in the workflow, this repo can post:
+Depending on which workflow/scripts run, this repo can post:
 
-* Free chapter announcements
-* Paid/advance chapter announcements
-* Comment announcements
-* New series launch announcements
-* New arc announcements
-* Extras / side story announcements
-* Completion announcements
+- free chapter announcements
+- paid/advance chapter announcements
+- comment announcements
+- new series launch announcements
+- new arc announcements
+- extras / side story announcements
+- completion announcements
 
 All normal Mistmint posts should go to the novel’s own thread.
 
@@ -58,8 +58,14 @@ All normal Mistmint posts should go to the novel’s own thread.
 
 Important files and folders:
 
-```text id="pj6jhx"
+```text
 mistmint-discord/
+├─ .github/workflows/
+│  ├─ chapters_discord.yml
+│  ├─ comments_discord.yml
+│  ├─ rss_to_discord.yml
+│  ├─ delete-discord-message.yml
+│  └─ delete_discord_today.yml
 ├─ config/
 │  ├─ embeds.json
 │  ├─ feeds.json
@@ -67,9 +73,22 @@ mistmint-discord/
 │  ├─ server.json
 │  └─ thread_id_map.json
 ├─ arc_history/
-│  ├─ tvitpa_history.json
+│  ├─ amlwc_history.json
+│  ├─ hiaflg_history.json
 │  ├─ tdlbkgc_history.json
-│  └─ ...
+│  └─ tvitpa_history.json
+├─ message_templates/
+│  ├─ comments.toml
+│  ├─ completed_novels.toml
+│  ├─ free_chapters.toml
+│  ├─ new_arcs.toml
+│  ├─ new_extras.toml
+│  ├─ new_novels.toml
+│  └─ paid_chapters.toml
+├─ requirements/
+│  ├─ chapters.txt
+│  ├─ comments.txt
+│  └─ rss_dispatch.txt
 ├─ bot_free_chapters.py
 ├─ bot_paid_chapters.py
 ├─ bot_comments.py
@@ -78,7 +97,10 @@ mistmint-discord/
 ├─ new_extra_checker.py
 ├─ completed_novel_checker.py
 ├─ config_loader.py
+├─ message_context.py
+├─ message_renderer.py
 ├─ state.json
+├─ state_rss.json
 └─ README.md
 ```
 
@@ -92,17 +114,17 @@ mistmint-discord/
 
 Thread routing is based on short code:
 
-```text id="wlyvvk"
+```text
 short_code → thread_id
 ```
 
 Example:
 
-```json id="6op41c"
+```json
 {
   "TDLBKGC": "1438462596381413417",
   "TVITPA": "1444214902322368675",
-  "AMLWC": "1517842780003635240"
+  "AMLWC": "1517851370055794868"
 }
 ```
 
@@ -114,11 +136,11 @@ Example:
 
 Invite the bot to the Mistmint server with permissions:
 
-* Send Messages
-* Send Messages in Threads
-* Read Message History
-* Embed Links
-* Attach Files, if images are used
+- Send Messages
+- Send Messages in Threads
+- Read Message History
+- Embed Links
+- Attach Files, if images are used
 
 ---
 
@@ -126,28 +148,28 @@ Invite the bot to the Mistmint server with permissions:
 
 Add these in:
 
-```text id="bw1w9x"
+```text
 Settings → Secrets and variables → Actions
 ```
 
 Required:
 
-| Secret              | Purpose           |
-| ------------------- | ----------------- |
+| Secret | Purpose |
+| --- | --- |
 | `DISCORD_BOT_TOKEN` | Discord bot token |
 
 Optional/legacy, only if an old workflow still uses it:
 
-| Secret                  | Purpose                                 |
-| ----------------------- | --------------------------------------- |
-| `DISCORD_CHANNEL_ID`    | Legacy channel-based posting            |
+| Secret | Purpose |
+| --- | --- |
+| `DISCORD_CHANNEL_ID` | Legacy channel-based posting |
 | `<SHORTCODE>_THREAD_ID` | Legacy per-novel thread secret fallback |
 
 Recommended current setup is **not** one secret per novel.
 
 Use:
 
-```text id="n6qlx2"
+```text
 config/thread_id_map.json
 ```
 
@@ -157,33 +179,27 @@ instead.
 
 ### 3. Ensure State Files Exist
 
-At minimum:
+At minimum, commit valid JSON in:
 
-```json id="lp5lr6"
+```text
+state.json
+state_rss.json
+arc_history/*.json
+```
+
+For empty state files, use:
+
+```json
 {}
 ```
 
-in:
+A common failure is:
 
-```text id="72s92j"
-state.json
-```
-
-If your scripts use extra state files, make sure they also contain valid JSON.
-
-Common pitfall:
-
-```text id="eceh0p"
+```text
 JSONDecodeError
 ```
 
-usually means a state file is empty or malformed.
-
-Fix it by committing:
-
-```json id="0pil4w"
-{}
-```
+That usually means a state file is empty or malformed.
 
 ---
 
@@ -191,19 +207,19 @@ Fix it by committing:
 
 The workflow should install the latest `rss-feed` package:
 
-```bash id="do9wx8"
+```bash
 pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
 ```
 
 This lets Mistmint scripts import:
 
-```python id="cjsorg"
+```python
 from novel_mappings import HOSTING_SITE_DATA
 ```
 
-and helpers like:
+and helpers such as:
 
-```python id="n5gr3j"
+```python
 get_novel_details_by_short_code(short_code)
 find_novel_by_short_code(short_code)
 short_code_has_free_chapters(short_code)
@@ -215,33 +231,32 @@ short_code_has_comments_feed(short_code)
 
 ## Dependencies
 
-Workflow install step should include:
+Use the requirement files in `requirements/` from the workflows.
 
-```bash id="pltz4u"
-pip install discord.py feedparser python-dateutil aiohttp requests tomli
+Typical install commands:
+
+```bash
+pip install -r requirements/chapters.txt
+pip install -r requirements/comments.txt
+pip install -r requirements/rss_dispatch.txt
+pip install --upgrade git+https://github.com/Cannibal-Turtle/rss-feed.git@main
 ```
 
-`tomli` is only needed for Python below 3.11, but it is safe to install.
+Common direct dependencies include:
+
+```bash
+pip install discord.py feedparser python-dateutil aiohttp requests tomli
+```
 
 ---
 
 ## Config Files
 
-Config lives in:
+### `config/files.json`
 
-```text id="q2eouk"
-config/
-```
+Central paths:
 
----
-
-## `config/files.json`
-
-This stores file paths used by scripts.
-
-Example:
-
-```json id="hb1dye"
+```json
 {
   "state_path": "state.json",
   "rss_state_path": "state_rss.json",
@@ -250,83 +265,99 @@ Example:
 }
 ```
 
-Important field:
-
-```json id="4zslvo"
-"thread_map_file": "config/thread_id_map.json"
-```
-
-This is what lets `config_loader.py` load the per-novel thread map.
-
 ---
 
-## `config/thread_id_map.json`
+### `config/server.json`
 
-This maps novel short codes to Discord thread IDs.
+Mistmint server-level settings:
 
-Example:
-
-```json id="wa93jw"
+```json
 {
-  "TVITPA": "1444214902322368675",
-  "TDLBKGC": "1438462596381413417",
-  "AMLWC": "1517842780003635240"
+  "host_target": "Mistmint Haven",
+  "author_url": "https://www.mistminthaven.com/account/@CannibalTurtle-5082",
+  "global_mention": "||@everyone||",
+  "ping_user_id": "603578473814032414",
+  "auto_archive_allowed": [60, 1440, 4320, 10080],
+  "default_auto_archive_minutes": 10080
 }
 ```
 
-Use the short code from the RSS novel TOML:
+| Field | Purpose |
+| --- | --- |
+| `host_target` | Host filter. Usually `Mistmint Haven` |
+| `author_url` | Author/profile URL used in embeds |
+| `global_mention` | Global mention text used where appropriate |
+| `ping_user_id` | Optional user ID for admin/error pings |
+| `auto_archive_allowed` | Allowed Discord thread archive durations |
+| `default_auto_archive_minutes` | Default auto-archive value for thread handling |
 
-```toml id="afyhpm"
-short_code = "AMLWC"
+---
+
+### `config/thread_id_map.json`
+
+Maps novel short codes to Discord thread IDs:
+
+```json
+{
+  "TVITPA": "1444214902322368675",
+  "TDLBKGC": "1438462596381413417",
+  "ATVHE": "1462019944823656608",
+  "WSMSC": "1469896904761544845",
+  "HIAFLG": "1471742754261438620",
+  "EC": "1488217762231877743",
+  "AMLWC": "1517851370055794868"
+}
 ```
 
-Then add the same key here:
-
-```json id="z2rbo1"
-"AMLWC": "1517842780003635240"
-```
+Short codes should match the novel TOML in `rss-feed` exactly after uppercasing.
 
 ---
 
 ## How to Get a Thread ID
 
-A Discord thread URL looks like:
+In Discord desktop/web:
 
-```text id="lwo8yo"
-https://discord.com/channels/1379303379221614702/1433327716937240626
-```
+1. Enable Developer Mode.
+2. Right-click the thread.
+3. Click **Copy Thread ID**.
+4. Add it to `config/thread_id_map.json`.
 
-The parts are:
+Thread IDs are not the same as role IDs.
 
-```text id="c31w6p"
-1379303379221614702 = server/guild ID
-1433327716937240626 = thread ID
-```
+---
 
-Use the second number as the thread ID.
+### `config/feeds.json`
 
-Example:
+Defines the RSS source URLs and dedupe keys:
 
-```json id="0k5dyj"
+```json
 {
-  "NEWCODE": "1433327716937240626"
+  "free": {
+    "url": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+    "last_guid_key": "free_last_guid",
+    "seen_key": "free_seen_guids"
+  },
+  "paid": {
+    "url": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+    "last_guid_key": "paid_last_guid",
+    "seen_key": "paid_seen_guids"
+  },
+  "comments": {
+    "url": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+    "seen_key": "comments_seen_guids"
+  },
+  "seen_cap": 500
 }
 ```
 
 ---
 
-## `config/embeds.json`
+### `config/embeds.json`
 
-Embed colors are configured here.
+Embed color settings:
 
-JSON does not allow `#` comments. Use `_comment` if you want a note.
-
-Example:
-
-```json id="gkc3bf"
+```json
 {
-  "_comment": "Color values can be fixed hex codes or \"novel\". When set to \"novel\", the bot uses theme_color/discord_color from rss-feed/mappings/novels/*.toml.",
-
   "colors": {
     "free_chapter": "FFF9BF",
     "paid_chapter": "A87676",
@@ -338,115 +369,9 @@ Example:
 }
 ```
 
----
+Colors can be hex strings or, where supported by Python, `"novel"`.
 
-## Novel-Specific Embed Colors
-
-Each color can use either a fixed hex code:
-
-```json id="371aop"
-"paid_chapter": "A87676"
-```
-
-or the novel’s default color from `rss-feed/mappings/novels/*.toml`:
-
-```json id="je5cwu"
-"paid_chapter": "novel"
-```
-
-When set to `"novel"`, the bot uses:
-
-```toml id="7g70f2"
-theme_color = "#c90016"
-```
-
-or:
-
-```toml id="6piyit"
-discord_color = "#c90016"
-```
-
-from the novel’s RSS TOML file.
-
-If no novel color is found, it falls back to the script’s default color.
-
-Example mixed config:
-
-```json id="z7tkdg"
-{
-  "colors": {
-    "free_chapter": "novel",
-    "paid_chapter": "novel",
-    "comments": "F0C7A4",
-    "new_novel": "novel",
-    "arc_unlocked": "novel",
-    "arc_locked": "novel"
-  }
-}
-```
-
-Supported special values:
-
-```text id="11gieb"
-novel
-theme
-theme_color
-discord_color
-```
-
-Recommended value:
-
-```json id="8yj2sy"
-"paid_chapter": "novel"
-```
-
----
-
-## Important Color Note
-
-If `config/embeds.json` says:
-
-```json id="2ohqa4"
-"paid_chapter": "novel"
-```
-
-then the script must use:
-
-```python id="aysyel"
-resolve_embed_color(...)
-```
-
-not:
-
-```python id="3sjzn1"
-embed_color(...)
-```
-
-`embed_color(...)` expects a real hex color and will crash on `"novel"`.
-
----
-
-## `config/server.json`
-
-This stores server-level config.
-
-Example values may include:
-
-```json id="d0tmkh"
-{
-  "guild_id": "1379303379221614702"
-}
-```
-
-The Mistmint server/guild ID is fixed unless the bot is moved to another server.
-
----
-
-## `config/feeds.json`
-
-This stores feed-related config if needed.
-
-Most actual feed URLs come from `rss-feed` through `novel_mappings.py`.
+If a color is set to `"novel"`, it resolves from the novel TOML in `rss-feed`, usually `theme_color` or `discord_color`.
 
 ---
 
@@ -454,18 +379,14 @@ Most actual feed URLs come from `rss-feed` through `novel_mappings.py`.
 
 ### In `rss-feed/mappings/novels/*.toml`
 
-Novel metadata belongs in the RSS repo.
+Novel metadata:
 
-Example:
-
-```toml id="podahh"
+```toml
 host = "Mistmint Haven"
-
-title = "After the Male Leads Went Crazy, They All Turned Into Male Ghosts"
-short_code = "AMLWC"
-
-novel_url = "https://mistminthaven.com/novel/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/"
-featured_image = "https://mistminthaven.com/wp-content/uploads/cover.jpg"
+title = "Novel Title"
+short_code = "CODE"
+novel_url = "https://..."
+featured_image = "https://..."
 
 has_free = true
 has_paid = true
@@ -474,158 +395,46 @@ has_comments = true
 is_nsfw = false
 is_membership = false
 
-chapter_count = "92 Chapters"
-last_chapter = "Chapter 92"
+chapter_count = "93 Chapters"
+last_chapter = "Chapter 93"
 start_date = ""
-
-history_file = "arc_history/amlwc_history.json"
-
+history_file = ""
 discord_color = "#c90016"
 ```
 
 ### In `mistmint-discord/config/thread_id_map.json`
 
-Thread IDs belong here.
+Only Mistmint thread routing:
 
-Example:
-
-```json id="3c8y3c"
+```json
 {
-  "AMLWC": "1517842780003635240"
+  "CODE": "123456789012345678"
 }
 ```
 
-Do not put thread IDs in RSS mapping unless a script explicitly needs that later.
-
----
-
-## Adding a New Mistmint Novel
-
-### 1. Add the Novel in `rss-feed`
-
-Create a new TOML file:
-
-```text id="g5d8w0"
-rss-feed/mappings/novels/code.toml
-```
-
-Example:
-
-```toml id="kha83b"
-host = "Mistmint Haven"
-
-title = "Novel Title Here"
-short_code = "CODE"
-
-novel_url = "https://mistminthaven.com/novel/..."
-featured_image = "https://mistminthaven.com/wp-content/uploads/cover.jpg"
-
-has_free = true
-has_paid = true
-has_comments = true
-
-is_nsfw = false
-is_membership = false
-
-chapter_count = "120 Chapters + 5 Extras + 2 Side Stories"
-last_chapter = "Chapter 120"
-start_date = "14/02/2025"
-
-history_file = "arc_history/code_history.json"
-
-discord_color = "#c90016"
-```
-
-Notes:
-
-* `short_code` should be unique.
-* `last_chapter` is used by completion checker.
-* `chapter_count` is used in completion/extras messages.
-* `start_date` is used for duration text.
-* `history_file` is used by arc checker.
-* `discord_color` can be used when `embeds.json` uses `"novel"`.
-
----
-
-### 2. Create or Get the Novel’s Thread
-
-Create the novel thread in the Mistmint server.
-
-Copy the thread ID from the thread URL.
-
-Example URL:
-
-```text id="7bdshp"
-https://discord.com/channels/1379303379221614702/1433327716937240626
-```
-
-Thread ID:
-
-```text id="kzazlu"
-1433327716937240626
-```
-
----
-
-### 3. Add the Thread ID
-
-Edit:
-
-```text id="t5lr6l"
-config/thread_id_map.json
-```
-
-Add:
-
-```json id="whbmfl"
-{
-  "CODE": "1433327716937240626"
-}
-```
-
-Keep the JSON valid.
-
-Example with multiple novels:
-
-```json id="4ff9bs"
-{
-  "TVITPA": "1444214902322368675",
-  "TDLBKGC": "1438462596381413417",
-  "AMLWC": "1517842780003635240",
-  "CODE": "1433327716937240626"
-}
-```
-
----
-
-### 4. Commit Changes
-
-Commit changes in both repos as needed:
-
-```text id="4vuwqr"
-rss-feed
-mistmint-discord
-```
-
-Then run the workflow.
+Do not put novel metadata here.
 
 ---
 
 ## Scripts in This Repo
 
-| Script                       | Purpose                            | Needs Feed                     | Posts To                                   | Required Secret     |
-| ---------------------------- | ---------------------------------- | ------------------------------ | ------------------------------------------ | ------------------- |
-| `bot_free_chapters.py`       | Free chapter announcements         | `free_feed`                    | Per-novel thread                           | `DISCORD_BOT_TOKEN` |
-| `bot_paid_chapters.py`       | Paid/advance chapter announcements | `paid_feed`                    | Per-novel thread                           | `DISCORD_BOT_TOKEN` |
-| `bot_comments.py`            | Comment announcements              | `comments_feed`                | Per-novel thread or configured destination | `DISCORD_BOT_TOKEN` |
-| `new_novel_checker.py`       | New series launch                  | `free_feed`                    | Per-novel thread                           | `DISCORD_BOT_TOKEN` |
-| `new_arc_checker.py`         | New locked/advance arc             | `free_feed` + `paid_feed`      | Per-novel thread                           | `DISCORD_BOT_TOKEN` |
-| `new_extra_checker.py`       | Extras / side stories              | `paid_feed`                    | Per-novel thread                           | `DISCORD_BOT_TOKEN` |
-| `completed_novel_checker.py` | Paid/free/only-free completion     | `paid_feed` and/or `free_feed` | Per-novel thread                           | `DISCORD_BOT_TOKEN` |
+| Script | Purpose |
+| --- | --- |
+| `bot_free_chapters.py` | Posts free Mistmint chapters to the novel thread |
+| `bot_paid_chapters.py` | Posts paid/advance Mistmint chapters to the novel thread |
+| `bot_comments.py` | Posts comments to the novel thread |
+| `new_novel_checker.py` | Announces a new Mistmint series launch |
+| `new_arc_checker.py` | Announces new arcs |
+| `new_extra_checker.py` | Announces extras/side stories |
+| `completed_novel_checker.py` | Announces paid/free/only-free completion |
 
-If you kept any legacy channel-based jobs, they may still use `DISCORD_CHANNEL_ID`.
+Shared helpers:
 
-Current Mistmint posting should route through per-novel threads.
+```text
+config_loader.py
+message_context.py
+message_renderer.py
+```
 
 ---
 
@@ -633,51 +442,50 @@ Current Mistmint posting should route through per-novel threads.
 
 ### Free Chapter Bot
 
-Requires:
+Needs:
 
-```text id="gs1a4k"
-free_feed
+```text
+title
+link
+chapter
+chaptername
+host
+short_code
+pub_date/guid
 ```
-
-Posts new free/public chapters.
-
----
 
 ### Paid Chapter Bot
 
-Requires:
+Needs:
 
-```text id="h18ljd"
-paid_feed
+```text
+title
+link
+chapter
+chaptername
+host
+short_code
+category/pub_date/guid
 ```
-
-Posts new paid/advance chapters.
-
----
 
 ### Comment Bot
 
-Requires:
+Needs:
 
-```text id="g9sd1c"
-comments_feed
+```text
+title
+link
+author/comment info
+host
+short_code
+pub_date/guid
 ```
-
-Posts new comments.
-
----
 
 ### New Series Launch
 
-Requires:
+Detects first public drops such as:
 
-```text id="8bcu36"
-free_feed
-```
-
-Detects first public drops:
-
-```text id="6oyt5h"
+```text
 Chapter 1
 Ch. 1
 Episode 1
@@ -686,331 +494,309 @@ Ep. 1
 Prologue
 ```
 
-Skips paywalled-only debuts.
-
----
-
 ### New Arc Alerts
 
-Requires:
-
-```text id="ycsw59"
-free_feed
-paid_feed
-history_file
-```
-
-If `history_file = ""`, the novel is skipped for arc tracking.
-
----
+Uses paid feed + `history_file` from novel TOML.
 
 ### Extras / Side Stories
 
-Requires:
-
-```text id="2nx7wm"
-paid_feed
-```
-
-Extras totals may be parsed from `chapter_count` using words like:
-
-```text id="paxgwi"
-extras
-side story
-side stories
-```
-
-Example:
-
-```toml id="q90wfc"
-chapter_count = "120 Chapters + 5 Extras + 2 Side Stories"
-```
-
----
+Detects extra/side-story chapter labels.
 
 ### Completion
 
-Runs in two modes:
+Uses novel TOML fields such as:
 
-```bash id="2op8qv"
-python completed_novel_checker.py --feed paid
-python completed_novel_checker.py --feed free
-```
-
-Uses:
-
-```text id="odtwhl"
-last_chapter
-chapter_count
-start_date
-```
-
-Paid completion and only-free completion can use `start_date`.
-
-If:
-
-```toml id="g1l70j"
+```toml
+chapter_count = "93 Chapters"
+last_chapter = "Chapter 93"
 start_date = ""
 ```
-
-then the message skips the “After X of updates...” phrase.
-
-If:
-
-```toml id="gdewrt"
-last_chapter = ""
-```
-
-completion checking may skip that novel.
 
 ---
 
 ## Message Style
 
-### General Mistmint Behavior
+Templates live in:
 
-* Posts go to per-novel threads.
-* No global ping line by default.
-* No generic channel posting unless a legacy job still does that.
-* Thread routing comes from `config/thread_id_map.json`.
-
----
-
-### `new_novel_checker.py`
-
-The role-react instruction is replaced with a thread-follow instruction:
-
-```text id="lj30x4"
-To get notified on new chapters, follow https://discord.com/channels/1379303379221614702/<THREAD_ID> thread
+```text
+message_templates/
 ```
 
-The URL is composed from the thread ID.
+Current templates:
 
-Embed author name:
-
-```text id="ymqre1"
-{translator} <a:Bow:1365575505171976246>
+```text
+comments.toml
+completed_novels.toml
+free_chapters.toml
+new_arcs.toml
+new_extras.toml
+new_novels.toml
+paid_chapters.toml
 ```
 
----
+General behavior:
 
-### `new_extra_checker.py`
-
-The old global header line is removed:
-
-```text id="3b18ms"
-base_mention | ONGOING_ROLE
-```
-
-Extras announcements post only to the novel thread.
-
----
-
-### `completed_novel_checker.py`
-
-Handles:
-
-```text id="z7g0pa"
-paid_completion
-free_completion
-only_free_completion
-```
-
-Posts only to per-novel threads.
+- normal chapter/comment posts go to the novel thread
+- Mistmint-only scripts filter `host == "Mistmint Haven"`
+- templates control the message wording and embed style
+- config files control thread routing and colors
+- Python controls parsing, dedupe, filtering, and posting logic
 
 ---
 
 ## Arc History
 
-Arc history files live in:
+Arc history lives in:
 
-```text id="x9dhua"
+```text
 arc_history/
 ```
 
-Example:
+Use a history file only for novels that need arc tracking.
 
-```text id="v0w78y"
-arc_history/amlwc_history.json
+In `rss-feed/mappings/novels/code.toml`:
+
+```toml
+history_file = "arc_history/code_history.json"
 ```
 
-The matching RSS novel TOML should contain:
+Then create the file in this repo:
 
-```toml id="rclh3d"
-history_file = "arc_history/amlwc_history.json"
+```text
+arc_history/code_history.json
 ```
 
-For no arc tracking:
+with:
 
-```toml id="4krqmb"
+```json
+{}
+```
+
+If a novel does not use arc tracking:
+
+```toml
 history_file = ""
 ```
 
-Scripts should treat empty history file as “skip arc tracking.”
+The checker safely skips it.
 
 ---
 
 ## State Files
 
-State files prevent duplicate posting.
+State files prevent duplicate announcements:
 
-Common flags:
-
-```text id="i4bcwp"
-launch_free
-paid_completion
-free_completion
-only_free_completion
-extra_announced
-last_extra_announced
+```text
+state.json
+state_rss.json
+arc_history/*.json
 ```
 
-To re-announce something, delete the relevant flag for that novel, commit, and rerun.
+Make sure they contain valid JSON.
 
-Common pitfall:
+For empty state:
 
-```text id="ke2mtn"
+```json
+{}
+```
+
+Common issue:
+
+```text
 JSONDecodeError
 ```
 
-Fix by committing valid JSON:
-
-```json id="f2bwmd"
-{}
-```
+Fix by replacing the malformed file with valid JSON and committing it.
 
 ---
 
 ## Manual Runs
 
-Run locally:
+From the repo root, common manual script runs are:
 
-```bash id="ed7frf"
-# Free chapters
+```bash
 python bot_free_chapters.py
-
-# Paid chapters
 python bot_paid_chapters.py
-
-# Comments
 python bot_comments.py
-
-# Completion
-python completed_novel_checker.py --feed paid
-python completed_novel_checker.py --feed free
-
-# Extras
+python completed_novel_checker.py
 python new_extra_checker.py
-
-# New series launch
-python new_novel_checker.py --feed free
-
-# New arcs
+python new_novel_checker.py
 python new_arc_checker.py
 ```
 
-Make sure environment variables and config files are available locally.
+Make sure the required environment variables and dependencies are available before running locally.
 
 ---
 
 ## Short Code Rule
 
-Preferred source:
+Short codes are the stable bridge between repos.
 
-```toml id="b50dx4"
+The same short code should be used in:
+
+```text
+rss-feed/mappings/novels/*.toml
+mistmint-discord/config/thread_id_map.json
+arc_history/code_history.json, if applicable
+```
+
+Use uppercase short codes:
+
+```toml
 short_code = "AMLWC"
 ```
 
-from the RSS novel TOML.
+---
 
-If `short_code` is missing, some legacy code may auto-derive one from title:
+## Adding a New Mistmint Novel
 
-```text id="j5ipxp"
-Uppercase
-Replace non-alphanumeric with _
-Trim _ on both ends
+### 1. Add the Novel in `rss-feed`
+
+Create:
+
+```text
+rss-feed/mappings/novels/code.toml
 ```
 
-But do not rely on that for new novels.
+Minimum fields:
 
-Always set an explicit short code.
+```toml
+host = "Mistmint Haven"
+title = "Novel Title"
+short_code = "CODE"
+novel_url = "https://..."
+featured_image = "https://..."
+
+has_free = true
+has_paid = true
+has_comments = true
+
+is_nsfw = false
+is_membership = false
+```
+
+Optional fields:
+
+```toml
+chapter_count = "93 Chapters"
+last_chapter = "Chapter 93"
+start_date = ""
+history_file = ""
+discord_color = "#c90016"
+```
+
+### 2. Create or Get the Novel Thread
+
+Create the thread in Discord or open the existing novel thread.
+
+Copy the thread ID using Developer Mode.
+
+### 3. Add the Thread ID
+
+Edit:
+
+```text
+config/thread_id_map.json
+```
+
+Add:
+
+```json
+{
+  "CODE": "123456789012345678"
+}
+```
+
+### 4. Add Arc History if Needed
+
+If using arc tracking:
+
+```toml
+history_file = "arc_history/code_history.json"
+```
+
+and create:
+
+```json
+{}
+```
+
+in:
+
+```text
+arc_history/code_history.json
+```
+
+### 5. Commit Changes
+
+Commit both repos if you changed both:
+
+```text
+rss-feed
+mistmint-discord
+```
 
 ---
 
 ## Adding a New Mistmint Paid Chapter
 
-This happens on the `rss-feed` side.
+Usually no Discord repo edit is needed.
 
-Update the novel TOML if needed:
+The flow is:
 
-```toml id="pl7jqu"
-pub_date_override = { hour = 12, minute = 0, second = 0 }
+```text
+Mistmint paid chapter appears
+   ↓
+rss-feed updates paid_chapters_feed.xml
+   ↓
+mistmint-discord reads paid feed
+   ↓
+short_code resolves to thread_id
+   ↓
+bot posts in the novel thread
 ```
 
-Update manual state if using STATE mode:
+Check these if it does not post:
 
-```text id="7dfw5p"
-manual_scripts/mistmint_state.json
-```
-
-Example field:
-
-```json id="ede6sw"
-"latest_available_chapter": "Chapter 12"
-```
-
-Then run:
-
-```text id="dq6180"
-Update Paid Feed
-```
-
-workflow in `rss-feed`.
+1. The novel has `has_paid = true` in `rss-feed`.
+2. The paid feed contains the item.
+3. The short code exists in `config/thread_id_map.json`.
+4. `DISCORD_BOT_TOKEN` is valid.
+5. The bot can send messages in the thread.
 
 ---
 
 ## Mistmint Mode Notes
 
-The RSS side may run in:
-
-```text id="eqhbiu"
-API mode
-STATE mode
-```
-
-STATE mode uses manual files like:
-
-```text id="o22i68"
-manual_scripts/mistmint_state.json
-manual_scripts/paid_history.json
-```
-
-If switching modes, clear or update state carefully to avoid duplicate or missing paid chapter entries.
+- This repo should only post Mistmint items.
+- Host filtering uses `host_target` from `config/server.json`.
+- Thread routing uses short code.
+- No Python edit should be needed per novel.
+- New novels need RSS TOML + thread map entry.
 
 ---
 
 ## Workflows
 
-A typical workflow may run:
+### `chapters_discord.yml`
 
-```bash id="23t44e"
-python bot_free_chapters.py
-python bot_paid_chapters.py
-python bot_comments.py
-python new_novel_checker.py --feed free
-python new_arc_checker.py
-python new_extra_checker.py
-python completed_novel_checker.py --feed paid
-python completed_novel_checker.py --feed free
-```
+Runs free and paid chapter posting.
 
-The repo may be triggered by:
+### `comments_discord.yml`
 
-```text id="mh2g99"
-rss-feed workflow dispatch
-manual workflow_dispatch
-schedule/cron
-```
+Runs comment posting.
+
+### `rss_to_discord.yml`
+
+Runs checker-style announcements such as extras and completion.
+
+### `delete-discord-message.yml`
+
+Manual utility to delete specific Discord messages by ID.
+
+### `delete_discord_today.yml`
+
+Manual utility to delete today’s messages in a channel/thread.
 
 ---
 
@@ -1020,136 +806,101 @@ schedule/cron
 
 Check:
 
-```text id="6b8u0g"
+```text
 config/thread_id_map.json
+short_code in RSS/novel TOML
+host_target in config/server.json
 ```
 
-Make sure the short code matches the RSS TOML exactly.
-
-Example:
-
-```toml id="o5e41r"
-short_code = "AMLWC"
-```
-
-must match:
-
-```json id="u0miig"
-"AMLWC": "1517842780003635240"
-```
-
----
+Also confirm the ID is a thread ID, not a role/channel/message ID.
 
 ### Bot Did Not Post
 
 Check:
 
-* `DISCORD_BOT_TOKEN` exists.
-* Bot is invited to the server.
-* Bot has Send Messages in Threads.
-* Thread ID is correct.
-* The thread is not archived/locked, unless your script unarchives.
-* The required feed exists for that script.
-
----
+1. The feed contains a new item.
+2. The item host is `Mistmint Haven`.
+3. The item has a short code.
+4. The short code exists in `thread_id_map.json`.
+5. State did not already mark it as seen.
+6. The bot has permission to send in the thread.
 
 ### Embed Color Crashed
 
-If `config/embeds.json` says:
+Check:
 
-```json id="xxouxb"
-"paid_chapter": "novel"
+```text
+config/embeds.json
 ```
 
-then the script must call:
+Valid colors:
 
-```python id="0rujcn"
-resolve_embed_color(...)
+```json
+"FFF9BF"
+"#FFF9BF"
+"novel"
 ```
 
-not:
+Invalid colors:
 
-```python id="1v5ezq"
-embed_color(...)
+```json
+"yellow"
+"FFF"
+"not-a-color"
 ```
 
-`embed_color(...)` expects a hex code and will crash on `"novel"`.
+If using `"novel"`, make sure the novel TOML has a valid color such as:
 
----
+```toml
+discord_color = "#c90016"
+```
 
 ### JSON Config Crashed
 
-JSON does not allow comments.
+JSON does not allow comments or trailing commas.
 
-Invalid:
+Bad:
 
-```json id="dpbf8u"
-# comment
+```json
 {
-  "colors": {}
+  "state_path": "state.json", // comment
 }
 ```
 
-Valid:
+Good:
 
-```json id="mlfndn"
+```json
 {
-  "_comment": "This is a note.",
-  "colors": {}
+  "state_path": "state.json"
 }
 ```
-
----
 
 ### Arc Checker Skipped Novel
 
-Check RSS novel TOML:
+Check:
 
-```toml id="ddnb2x"
-history_file = ""
-```
-
-Empty means no arc tracking.
-
-For arc tracking, use:
-
-```toml id="au29uw"
+```toml
 history_file = "arc_history/code_history.json"
 ```
 
-Also make sure:
-
-```toml id="3f6flp"
-has_free = true
-has_paid = true
-```
-
----
+If it is empty, the skip is intentional.
 
 ### Completion Checker Skipped Novel
 
 Check:
 
-```toml id="40811y"
-last_chapter = ""
+```toml
+chapter_count = "93 Chapters"
+last_chapter = "Chapter 93"
 ```
 
-If empty, completion checking may skip.
-
-Set:
-
-```toml id="05kbbk"
-last_chapter = "Chapter 92"
-chapter_count = "92 Chapters"
-```
-
----
+If `start_date = ""`, the duration phrase is omitted but completion can still work.
 
 ### New Novel Did Not Announce
 
-Check that the first public drop appears in the free feed and matches one of:
+Check that the feed item looks like a first chapter:
 
-```text id="m6saiz"
+```text
 Chapter 1
 Ch. 1
 Episode 1
@@ -1158,24 +909,23 @@ Ep. 1
 Prologue
 ```
 
-Paywalled-only debuts are skipped.
+Also check that the novel host is Mistmint and the short code resolves.
 
 ---
 
 ## Design Guarantees
 
-* This repo targets Mistmint Haven only.
-* Posts route to per-novel threads.
-* Thread IDs live in `config/thread_id_map.json`.
-* Novel metadata lives in `rss-feed/mappings/novels/*.toml`.
-* `novel_mappings.py` remains import-compatible.
-* Embed colors can use fixed hex values or `"novel"`.
-* `"novel"` colors resolve to `theme_color` or `discord_color` from RSS novel TOML.
-* `history_file = ""` safely means no arc tracking.
-* `start_date = ""` safely means no duration phrase in completion messages.
-* State files prevent duplicate announcements.
-* No Python script edits are needed per novel.
-* New novels only need RSS TOML + thread map entry.
+- This repo is Mistmint-only.
+- `novel_mappings.py` remains import-compatible.
+- Novel metadata lives in `rss-feed`.
+- Thread routing lives in `config/thread_id_map.json`.
+- Embed colors live in `config/embeds.json`.
+- Server-level behavior lives in `config/server.json`.
+- `history_file = ""` safely means no arc tracking.
+- `start_date = ""` safely means no duration phrase in completion messages.
+- State files prevent duplicate announcements.
+- No Python script edits are needed per novel.
+- New novels only need RSS TOML + thread map entry.
 
 ---
 
@@ -1183,12 +933,7 @@ Paywalled-only debuts are skipped.
 
 When adding a new Mistmint novel:
 
-1. Add novel TOML in `rss-feed`:
-
-   ```text
-   mappings/novels/code.toml
-   ```
-
+1. Add novel TOML in `rss-feed/mappings/novels/`.
 2. Make sure it has:
 
    ```toml
@@ -1200,13 +945,7 @@ When adding a new Mistmint novel:
    ```
 
 3. Create/get the Discord thread ID.
-
-4. Add the thread ID to:
-
-   ```text
-   config/thread_id_map.json
-   ```
-
+4. Add the thread ID to `config/thread_id_map.json`.
 5. Add arc history only if needed:
 
    ```toml
@@ -1220,14 +959,13 @@ When adding a new Mistmint novel:
    ```
 
 7. Commit both repos.
-
-8. Run workflow.
+8. Run the workflow.
 
 ---
 
 ## Workflow Overview
 
-```text id="l16slu"
+```text
 rss-feed updates XML feeds
    ↓
 workflow triggers mistmint-discord
@@ -1244,7 +982,3 @@ announcement posts to the novel thread
    ↓
 state/history files update to prevent duplicates
 ```
-
----
-
-Now you can add Mistmint novels by updating TOML in `rss-feed` and adding one short-code thread entry in `mistmint-discord`.
