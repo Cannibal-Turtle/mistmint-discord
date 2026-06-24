@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-new_novel_checker.py (Mistmint)
+new_novel_checker.py (for thread servers)
 
 Announce a brand new novel when it FIRST becomes available for free/public reading.
 
@@ -25,9 +25,6 @@ Thread routing:
 Notes:
 - SHORTCODE is taken from HOSTING_SITE_DATA.novels[...]['short_code'] if present.
   If missing, it is derived from the title: uppercase and non-alnum → underscore.
-- Thread URL is constructed as:
-    https://discord.com/channels/1379303379221614702/<THREAD_ID>
-  (1379303379221614702 is the Mistmint server id you provided.)
 """
 
 import argparse
@@ -61,12 +58,11 @@ STATE_PATH    = require_file_value("state_path")
 BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 
 HOST_TARGET = require_server_value("host_target")
-MISTMINT_GUILD_ID = require_server_value("guild_id")
 
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
+_THREAD_GUILD_ID_CACHE = {}
 # ───────────────────────────────────────────────────────────────────────────────
-
 
 def commit_state_update(path=STATE_PATH):
     """Commit/push state.json so the skip flag survives the next run."""
@@ -282,7 +278,7 @@ def clean_feed_description(raw_html: str) -> str:
     return text
 
 
-# ─── Mistmint thread helpers (same principle as your other Mistmint scripts) ───
+# ──────────────────────── Thread helpers ────────────────────────
 
 def sanitize_shortcode_from_title(title: str) -> str:
     """Fallback SHORTCODE from title (A–Z/0–9 only)."""
@@ -304,8 +300,31 @@ def resolve_thread_id(novel_title: str, details: dict) -> str | None:
     return str(val)
 
 
-def build_thread_url(thread_id: str) -> str:
-    return f"https://discord.com/channels/{MISTMINT_GUILD_ID}/{thread_id}"
+def get_guild_id_for_thread(bot_token: str, thread_id: str) -> str:
+    if thread_id in _THREAD_GUILD_ID_CACHE:
+        return _THREAD_GUILD_ID_CACHE[thread_id]
+
+    headers = {"Authorization": f"Bot {bot_token}"}
+
+    r = requests.get(
+        f"https://discord.com/api/v10/channels/{thread_id}",
+        headers=headers,
+        timeout=15,
+    )
+    r.raise_for_status()
+
+    guild_id = str(r.json().get("guild_id") or "").strip()
+
+    if not guild_id:
+        raise RuntimeError(f"Could not resolve guild_id for thread {thread_id}")
+
+    _THREAD_GUILD_ID_CACHE[thread_id] = guild_id
+    return guild_id
+
+
+def build_thread_url(bot_token: str, thread_id: str) -> str:
+    guild_id = get_guild_id_for_thread(bot_token, thread_id)
+    return f"https://discord.com/channels/{guild_id}/{thread_id}"
 
 
 def load_novels_from_mapping():
@@ -367,7 +386,7 @@ def main():
             # resolve_thread_id already printed the helpful hint
             continue
 
-        follow_url = build_thread_url(thread_id)
+        follow_url = build_thread_url(bot_token, thread_id)
 
         feed_url = novel.get("free_feed")
         if not feed_url:

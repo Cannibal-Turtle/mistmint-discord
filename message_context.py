@@ -128,7 +128,7 @@ def build_feed_context(entry: Any) -> dict[str, Any]:
       ctx["global_mention"] = "@everyone"
       ctx["chapter_author_url"] = AUTHOR_URL
       ctx["button_label"] = "5"
-      ctx["button_emoji"] = "<:mistmint_currency:1433046707121422487>"
+      ctx["button_emoji"] = "<:host_currency:1433046707121422487>"
     """
     pub_dt = parse_pub_datetime(entry)
     pub_raw = (

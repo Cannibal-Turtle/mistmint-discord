@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-new_extra_checker.py (mistmint-discord)
+new_extra_checker.py (for thread servers)
 
 Detects Extras / Side Stories in paid feeds and posts ONE announcement
 into each novel's per-thread channel (no global fallback).
@@ -12,7 +12,7 @@ Routing:
     else derived from title: uppercase + non-alnum -> underscore.
 
 Behavior:
-  - Only processes novels under host == "Mistmint Haven".
+  - Only processes novels under target host.
   - Skips if series already completed (paid/free/only_free completion keys in state.json).
   - Sends at most once per novel (meta.extra_announced = True).
 
@@ -283,7 +283,7 @@ def process_extras(novel: dict):
             print(f"→ skipping extras for {novel['novel_id']} — final chapter present in feed")
             return
 
-    # 2) load state & guard against completion (align with Mistmint keys)
+    # 2) load state & guard against completion
     state    = load_state()
     novel_id = novel["novel_id"]
     meta     = state.setdefault(novel_id, {})

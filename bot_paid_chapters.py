@@ -164,7 +164,7 @@ def save_state(state):
 def _norm(s): return (s or "").strip()
 def _guid(e): return _norm(e.get("guid") or e.get("id")) or None
 
-def _is_mistmint(e):
+def _is_target_host(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
     return host.lower() == HOST_NAME_TARGET.lower()
 
@@ -242,12 +242,12 @@ async def send_new_paid_entries():
     state   = load_state()
     feed    = await asyncio.to_thread(feedparser.parse, RSS_URL)
     all_ents = list(reversed(feed.entries))              # oldest → newest
-    entries  = [e for e in all_ents if _is_mistmint(e)]  # Mistmint-only
+    entries  = [e for e in all_ents if _is_target_host(e)]  # Target host-only
 
     to_send = entries
 
     if not to_send:
-        print("🛑 No new Mistmint paid chapters—skipping Discord login.")
+        print(f"🛑 No new {HOST_NAME_TARGET} paid chapters—skipping Discord login.")
         return
 
     intents = discord.Intents.none()

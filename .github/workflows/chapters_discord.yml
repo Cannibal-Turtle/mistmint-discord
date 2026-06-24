@@ -46,7 +46,7 @@ jobs:
           USE_UNARCHIVE: "0"
         run: python new_arc_checker.py
 
-      # FREE feed → Mistmint threads
+      # FREE feed → Novel threads
       - name: Run Free Chapters Bot
         if: >
           github.event_name == 'schedule' ||
@@ -58,7 +58,7 @@ jobs:
           # BOOTSTRAP_LATEST: '1'   # uncomment for first run to avoid backfill
         run: python bot_free_chapters.py
 
-      # PAID feed → Mistmint threads
+      # PAID feed → Novel threads
       - name: Run Paid Chapters Bot
         if: >
           github.event_name == 'schedule' ||

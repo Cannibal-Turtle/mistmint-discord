@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-new_arc_checker.py (mistmint-discord)
+new_arc_checker.py (for thread servers)
 
 Detects new arcs/worlds and posts a TOML-rendered announcement sequence
 into the per-novel thread.
@@ -13,7 +13,7 @@ Routing:
   Thread IDs are resolved from thread_id_map.json using novel short_code.
 
 Notes:
-  - Only processes novels under host "Mistmint Haven".
+  - Only processes novels under target host".
   - No role pings; allowed_mentions is empty.
 """
 
@@ -92,7 +92,6 @@ def post_payload(thread_id: str, message_payload: dict):
 
     payload = to_discord_api_payload(message_payload)
 
-    # Mistmint arc should not ping unless TOML explicitly allows it.
     if "allowed_mentions" not in payload:
         payload["allowed_mentions"] = {"parse": []}
 

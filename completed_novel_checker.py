@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-completed_novel_checker.py (mistmint-discord)
+completed_novel_checker.py (for thread servers)
 
-Posts completion announcements for Mistmint Haven novels into their
-per-novel threads (no fallback channel).
+Posts completion announcements for novels into their per-novel threads (no fallback channel).
 
 Usage:
   python completed_novel_checker.py --feed paid
@@ -323,7 +322,7 @@ def build_only_free_completion(novel, chap_field, chap_link, duration: str):
 def load_novels() -> list[dict]:
     """
     Pull novels directly from HOSTING_SITE_DATA, but only include:
-      - host == "Mistmint Haven"
+      - host == "Target Host"
       - last_chapter is defined
       - at least one feed present (free or paid)
     """

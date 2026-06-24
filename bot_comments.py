@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_comments.py (mistmint-discord)
+bot_comments.py (for thread servers)
 
 Reads aggregated comment RSS and posts each new item into the per-novel thread
-(on Mistmint Haven only). Routing:
+Routing:
   - Thread IDs are resolved from thread_id_map.json using novel short_code.
 
 SHORTCODE comes from the RSS entry's <short_code>,
@@ -275,7 +275,7 @@ def main():
             continue
 
         if host != HOST_TARGET:
-            print(f"↷ Skipping non-Mistmint host: {host}  ({novel_title})")
+            print(f"↷ Skipping non-target host: {host}  ({novel_title})")
             continue
 
         short_code = get_entry_short_code(entry)

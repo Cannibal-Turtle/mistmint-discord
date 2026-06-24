@@ -64,7 +64,7 @@ def save_state(state):
 def _norm(s): 
     return (s or "").strip()
 
-def _is_mistmint(e):
+def _is_target_host(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
     return host.lower() == HOST_NAME_TARGET.lower()
 
@@ -190,12 +190,12 @@ async def send_new_entries():
 
     feed     = feedparser.parse(RSS_URL)
     all_ents = list(reversed(feed.entries))            # oldest → newest
-    entries  = [e for e in all_ents if _is_mistmint(e)]
+    entries  = [e for e in all_ents if _is_target_host(e)]
 
     to_send = entries
 
     if not to_send:
-        print("🛑 No new Mistmint free chapters—skipping Discord login.")
+        print(f"🛑 No new {HOST_NAME_TARGET} free chapters—skipping Discord login.")
         return
 
     intents = discord.Intents.default()
