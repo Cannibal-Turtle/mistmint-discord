@@ -314,11 +314,7 @@ def format_site_genres(value) -> str:
 
 def get_site_genre(details: dict) -> str:
     """
-    Return site-native genres from novel TOML, with generic names preferred.
-
-    rss-feed currently writes Mistmint Haven's full genre list as
-    mistmint_haven_genres. If later you rename that to site_genres/site_genre,
-    this Discord repo will already pick it up.
+    Return site-native genres from novel TOML.
     """
     return format_site_genres(
         details.get("site_genres")
@@ -493,7 +489,7 @@ def main():
                 "follow_thread_url": follow_url,
                 "site_genre": novel.get("site_genre", ""),
                 "site_genre_block": (
-                    f"Genres: {novel.get('site_genre', '')}\n\n"
+                    f"*Genres: {novel.get('site_genre', '')}*\n\n"
                     if novel.get("site_genre", "")
                     else ""
                 ),
