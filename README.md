@@ -278,7 +278,8 @@ Mistmint server-level settings:
   "global_mention": "||@everyone||",
   "ping_user_id": "603578473814032414",
   "auto_archive_allowed": [60, 1440, 4320, 10080],
-  "default_auto_archive_minutes": 10080
+  "default_auto_archive_minutes": 10080,
+  "announce_first_arc_release": false
 }
 ```
 
@@ -290,6 +291,7 @@ Mistmint server-level settings:
 | `ping_user_id` | Optional user ID for admin/error pings |
 | `auto_archive_allowed` | Allowed Discord thread archive durations |
 | `default_auto_archive_minutes` | Default auto-archive value for thread handling |
+| `announce_first_arc_release` | If `true`, allows the first detected arc to post a first-arc launch announcement after the new novel launch has been recorded |
 
 ---
 
@@ -579,6 +581,47 @@ history_file = ""
 ```
 
 The checker safely skips it.
+
+### First Arc Launch Announcement Switch
+
+By default, the arc checker treats the first detected arc as a bootstrap setup step. This prevents old or existing Arc 1 data from being announced accidentally when arc tracking is first added.
+
+The switch lives in `config/server.json`:
+
+```json
+"announce_first_arc_release": false
+```
+
+Default behavior:
+
+```json
+"announce_first_arc_release": false
+```
+
+The first detected arc is saved into arc history, but no first arc announcement is posted.
+
+Enabled behavior:
+
+```json
+"announce_first_arc_release": true
+```
+
+The first detected arc can post a first-arc launch announcement.
+
+This works for:
+
+* free-only first arc
+* paid-only first arc
+* first run where unlocked and locked arc sections both have content
+
+The checker only renders sections that have content:
+
+* `has_unlocked = true` shows the Unlocked section
+* `has_locked = true` shows the Locked section
+
+So a free-only first arc will not show an empty Locked embed, and a paid-only first arc will not show an empty Unlocked embed.
+
+First arc announcements are also delayed until the new novel launch announcement has been recorded in state. This prevents the first arc announcement from posting before the new novel launch message.
 
 ---
 
