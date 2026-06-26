@@ -34,13 +34,36 @@ from config_loader import (
     THREAD_MAP_FILE,
     env_bool,
     require_server_value,
+    require_file_value,
 )
 
 BOT_TOKEN   = os.environ["DISCORD_BOT_TOKEN"]
 HOST_TARGET = require_server_value("host_target")
 
+STATE_PATH = require_file_value("state_path")
+
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
+
+def setting_bool(env_name: str, server_key: str, default: bool = False) -> bool:
+    raw = os.getenv(env_name)
+    if raw is None:
+        try:
+            raw = require_server_value(server_key)
+        except RuntimeError:
+            return default
+
+    if isinstance(raw, bool):
+        return raw
+
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+ANNOUNCE_FIRST_ARC_RELEASE = setting_bool(
+    "ANNOUNCE_FIRST_ARC_RELEASE",
+    "announce_first_arc_release",
+    False,
+)
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -192,6 +215,19 @@ def load_history(history_file):
         return h
     print(f"📂 No {history_file}; init new history")
     return {"unlocked": [], "locked": [], "last_announced": ""}
+
+def load_state(path=STATE_PATH):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+
+def launch_announcement_done(novel_title: str) -> bool:
+    state = load_state()
+    return bool(state.get(novel_title, {}).get("launch_free"))
 
 def save_history(history, history_file):
     """Saves the novel's arc history to JSON file with proper encoding."""
@@ -446,10 +482,36 @@ def process_arc(novel, thread_id: str, announce: bool = True):
     if not announce:
         first_run = (not had_locked_before and not had_unlocked_before)
 
-        if first_run and (free_created or paid_created) and history["locked"]:
+        is_first_arc_release_announcement = (
+            first_run
+            and ANNOUNCE_FIRST_ARC_RELEASE
+            and (free_created or paid_created)
+        )
+
+        if is_first_arc_release_announcement:
+            if not launch_announcement_done(novel["novel_title"]):
+                print(
+                    f"⏳ Sync-only saw first arc for {novel['novel_title']}, "
+                    "but launch_free is not recorded yet. Leaving arc history untouched."
+                )
+            else:
+                print(
+                    f"🌱 Sync-only saw first arc for {novel['novel_title']}. "
+                    "Leaving arc history untouched for the real announcement run."
+                )
+            return
+
+        if (
+            first_run
+            and (free_created or paid_created)
+            and history["locked"]
+            and not ANNOUNCE_FIRST_ARC_RELEASE
+        ):
             history["last_announced"] = history["locked"][-1]
             history_changed = True
             print(f"🌱 Sync-only bootstrap: last_announced = {history['last_announced']}")
+        elif first_run and (free_created or paid_created) and history["locked"]:
+            print("🌱 Sync-only first arc release: leaving last_announced empty so the paid bot can announce it.")
 
         if history_changed:
             save_history(history, history_file)
@@ -461,31 +523,75 @@ def process_arc(novel, thread_id: str, announce: bool = True):
 
     # 3.5 Bootstrap: if first-ever run created entries, save numbering only
     first_run = (not had_locked_before and not had_unlocked_before)
-    if first_run and (free_created or paid_created):
+
+    is_first_arc_release_announcement = (
+        first_run
+        and ANNOUNCE_FIRST_ARC_RELEASE
+        and (free_created or paid_created)
+    )
+
+    if is_first_arc_release_announcement and not launch_announcement_done(novel["novel_title"]):
+        print(
+            f"⏳ First arc detected for {novel['novel_title']}, "
+            "but launch_free is not recorded yet. Deferring arc announcement."
+        )
+        return
+
+    if first_run and (free_created or paid_created) and not ANNOUNCE_FIRST_ARC_RELEASE:
         if history["locked"]:
             history["last_announced"] = history["locked"][-1]
             print(f"🌱 Bootstrap: last_announced = {history['last_announced']}")
+        else:
+            print("🌱 Bootstrap: no locked arcs yet; saving numbering only.")
         save_history(history, history_file)
         commit_history_update(history_file)
         return
 
-    # Special-case exits
-    if free_created and not paid_created and not history["locked"]:
+    if (
+        free_created
+        and not paid_created
+        and not history["locked"]
+        and not is_first_arc_release_announcement
+    ):
         print("🌱 First arc started FREE; save numbering only.")
-        save_history(history, history_file); commit_history_update(history_file); return
-    if paid_created and not free_created and not had_locked_before and not had_unlocked_before:
-        print("💸 First arc started PAID-only; save numbering only.")
-        save_history(history, history_file); commit_history_update(history_file); return
+        save_history(history, history_file)
+        commit_history_update(history_file)
+        return
 
-    # if no locked arcs, nothing to hype
-    if not history["locked"]:
+    if (
+        paid_created
+        and not free_created
+        and not had_locked_before
+        and not had_unlocked_before
+        and not ANNOUNCE_FIRST_ARC_RELEASE
+    ):
+        print("💸 First arc started PAID-only; save numbering only.")
+        save_history(history, history_file)
+        commit_history_update(history_file)
+        return
+
+    if not history["locked"] and not is_first_arc_release_announcement:
         if history_changed:
             save_history(history, history_file)
             commit_history_update(history_file)
         print("ℹ️ No locked arcs. Done.")
         return
 
-    new_full = history["locked"][-1]
+    if is_first_arc_release_announcement:
+        all_arcs = history["unlocked"] + history["locked"]
+        new_full = next(
+            (t for t in all_arcs if extract_arc_number(t) == 1),
+            all_arcs[0],
+        )
+    else:
+        new_full = history["locked"][-1]
+
+    is_first_arc_release_announcement = (
+        ANNOUNCE_FIRST_ARC_RELEASE
+        and not history.get("last_announced", "")
+        and extract_arc_number(new_full) == 1
+    )
+
     if new_full == history.get("last_announced", ""):
         if history_changed:
             save_history(history, history_file)
@@ -505,7 +611,7 @@ def process_arc(novel, thread_id: str, announce: bool = True):
     locked_lines = deduplicate(locked_lines)
     if locked_lines:
         locked_lines[-1] = f"<a:9410pinkarrow:1368139217556996117>{locked_lines[-1]}"
-    locked_md = "\n".join(locked_lines) if locked_lines else "None"
+    locked_md = "\n".join(locked_lines)
 
   
     # Build TOML context + rendered Discord message sequence.
@@ -516,8 +622,11 @@ def process_arc(novel, thread_id: str, announce: bool = True):
         "short_code": novel.get("short_code", ""),
         "world_emoji": world_emoji,
         "unlocked_md": unlocked_md,
-        "locked_md": locked_md if locked_md else "None",
+        "locked_md": locked_md,
         "has_unlocked": bool(unlocked_md),
+        "has_locked": bool(locked_md),
+        "is_first_arc_release_announcement": is_first_arc_release_announcement,
+        "is_normal_arc_release": not is_first_arc_release_announcement,
     }
 
     arc_messages = render_message_sequence("new_arcs", arc_ctx)
