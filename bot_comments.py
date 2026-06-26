@@ -335,7 +335,6 @@ def main():
 
     for entry in to_send:
         guid        = entry.get("guid") or entry.get("id")
-        host        = (entry.get("host") or "").strip()
         novel_title = (entry.get("title") or "").strip()
 
         norm = normalize_guid(entry)
