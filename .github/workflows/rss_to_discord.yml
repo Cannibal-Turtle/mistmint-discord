@@ -209,8 +209,3 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements/rss_dispatch.txt
-
-      - name: Run First Arc Checker
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-        run: python new_arc_checker.py
