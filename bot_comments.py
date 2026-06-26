@@ -22,6 +22,9 @@ import os
 import json
 import re
 import time
+from datetime import datetime, timezone
+from dateutil import parser as dateparser
+
 import requests
 import feedparser
 
@@ -45,8 +48,12 @@ BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 STATE_FILE = require_file_value("rss_state_path")
 RSS_URL    = require_feed_url("comments")
-SEEN_KEY   = require_feed_value("comments", "seen_key")
-SEEN_CAP   = int(require_feeds_value("seen_cap"))
+
+FEED_KEY       = require_feed_value("comments", "last_guid_key")
+SEEN_KEY       = require_feed_value("comments", "seen_key")
+LAST_POST_TIME = require_feed_value("comments", "last_post_time_key")
+SEEN_CAP       = int(require_feeds_value("seen_cap"))
+TIME_BACKSTOP  = bool(require_feeds_value("time_backstop"))
 
 HOST_TARGET = require_server_value("host_target")
 
@@ -67,22 +74,56 @@ def load_state():
         st = {
             "free_last_guid": None,
             "paid_last_guid": None,
-            "comments_last_guid": None,
-            SEEN_KEY: []
+            FEED_KEY: None,
+            SEEN_KEY: [],
+            LAST_POST_TIME: None,
         }
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(st, f, indent=2, ensure_ascii=False)
+        save_state(st)
         return st
+
+    changed = False
+
+    if FEED_KEY not in st:
+        st[FEED_KEY] = None
+        changed = True
 
     if SEEN_KEY not in st:
         st[SEEN_KEY] = []
+        changed = True
+
+    if LAST_POST_TIME not in st:
+        st[LAST_POST_TIME] = None
+        changed = True
+
+    if changed:
         save_state(st)
 
     return st
 
+
 def save_state(state):
+    if isinstance(state.get(SEEN_KEY), list) and len(state[SEEN_KEY]) > SEEN_CAP:
+        state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
+
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+
+
+def normalize_guid(entry):
+    host = (entry.get("host") or "").strip()
+    guid = (entry.get("guid") or entry.get("id") or "").strip()
+    return f"{host}::{guid}" if guid else ""
+
+
+def parse_pub_iso(entry):
+    pub_raw = getattr(entry, "published", None)
+    if not pub_raw:
+        return None
+
+    try:
+        return dateparser.parse(pub_raw)
+    except Exception:
+        return None
 
 
 # ─── THREAD HELPERS ────────────────────────────────────────────────────────────
@@ -257,7 +298,34 @@ def main():
     state   = load_state()
     feed    = feedparser.parse(RSS_URL)
     entries = list(reversed(feed.entries))  # oldest → newest
-    to_send = entries
+
+    seen = set(state.get(SEEN_KEY, []))
+    last_post_time = state.get(LAST_POST_TIME)
+    last_post_dt = (
+        dateparser.parse(last_post_time)
+        if (TIME_BACKSTOP and last_post_time)
+        else None
+    )
+
+    to_send = []
+    for e in entries:
+        host = (e.get("host") or "").strip()
+        if host != HOST_TARGET:
+            continue
+
+        norm = normalize_guid(e)
+        if not norm:
+            continue
+
+        if norm in seen:
+            continue
+
+        if last_post_dt is not None:
+            dt = parse_pub_iso(e)
+            if dt and dt <= last_post_dt:
+                continue
+
+        to_send.append(e)
 
     if not to_send:
         print("🛑 No new comments to send.")
@@ -270,13 +338,9 @@ def main():
         host        = (entry.get("host") or "").strip()
         novel_title = (entry.get("title") or "").strip()
 
-        norm = f"{host}::{guid}"
+        norm = normalize_guid(entry)
         if norm in state[SEEN_KEY]:
             print(f"↷ Already sent, skipping {norm}")
-            continue
-
-        if host != HOST_TARGET:
-            print(f"↷ Skipping non-target host: {host}  ({novel_title})")
             continue
 
         short_code = get_entry_short_code(entry)
@@ -315,7 +379,11 @@ def main():
             print(f"✅ Sent comment {guid} → thread {thread_id}")
             
             state[SEEN_KEY].append(norm)
-            state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
+            state[FEED_KEY] = guid
+
+            dt = parse_pub_iso(entry) or datetime.now(timezone.utc)
+            state[LAST_POST_TIME] = dt.isoformat()
+
             save_state(state)
 
         except requests.HTTPError as e:
