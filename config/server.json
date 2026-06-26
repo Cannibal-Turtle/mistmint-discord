@@ -6,5 +6,6 @@
   "auto_archive_allowed": [60, 1440, 4320, 10080],
   "default_auto_archive_minutes": 10080,
   "announce_first_arc_release": true,
-  "announce_first_chapter_release": true
+  "announce_first_chapter_release": true,
+  "include_novel_updates_comments": false
 }

@@ -291,7 +291,45 @@ def build_comment_title(comment_txt: str, comment_image: str = "") -> str:
         return ""
 
     return f"{start_marker}{safe_comment}{end_marker}"
-  
+
+
+def setting_bool(env_name: str, server_key: str, default: bool = False) -> bool:
+    raw = os.getenv(env_name)
+
+    if raw is None:
+        raw = server_value(server_key, default)
+
+    if isinstance(raw, bool):
+        return raw
+
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def include_novel_updates_comments() -> bool:
+    return setting_bool(
+        "INCLUDE_NOVEL_UPDATES_COMMENTS",
+        "include_novel_updates_comments",
+        False,
+    )
+
+
+def _host_key(host: str) -> str:
+    return " ".join(str(host or "").strip().casefold().split())
+
+
+def is_target_host(host: str) -> bool:
+    return _host_key(host) == _host_key(HOST_TARGET)
+
+
+def is_novel_updates_host(host: str) -> bool:
+    key = _host_key(host)
+    compact = key.replace(" ", "").replace(".", "")
+    return key == "novel updates" or compact in {
+        "novelupdates",
+        "novelupdatescom",
+        "novelupdate",
+    }
+
 
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
@@ -307,11 +345,13 @@ def main():
         else None
     )
 
+    include_nu_comments = include_novel_updates_comments()
+    skipped_nu_comments = 0
+
     to_send = []
     for e in entries:
         host = (e.get("host") or "").strip()
-        if host != HOST_TARGET:
-            continue
+        is_nu = is_novel_updates_host(host)
 
         norm = normalize_guid(e)
         if not norm:
@@ -320,12 +360,28 @@ def main():
         if norm in seen:
             continue
 
+        if is_nu and not include_nu_comments:
+            state[SEEN_KEY].append(norm)
+            seen.add(norm)
+            skipped_nu_comments += 1
+            continue
+
+        if not is_target_host(host) and not (include_nu_comments and is_nu):
+            continue
+
         if last_post_dt is not None:
             dt = parse_pub_iso(e)
             if dt and dt <= last_post_dt:
                 continue
 
         to_send.append(e)
+
+    if skipped_nu_comments:
+        save_state(state)
+        print(
+            f"🚫 Skipped {skipped_nu_comments} Novel Updates comment(s) "
+            "because include_novel_updates_comments is false."
+        )
 
     if not to_send:
         print("🛑 No new comments to send.")
