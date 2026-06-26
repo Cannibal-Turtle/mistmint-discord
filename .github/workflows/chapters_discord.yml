@@ -66,14 +66,6 @@ jobs:
           # BOOTSTRAP_LATEST: '1'   # uncomment for first run to avoid backfill
         run: python bot_free_chapters.py
 
-      - name: Run Arc Checker Fallback
-        if: >
-          (github.event_name == 'workflow_dispatch' && (inputs.feed == 'paid' || inputs.feed == 'both')) ||
-          (github.event_name == 'repository_dispatch' && (github.event.client_payload.feed == 'paid' || github.event.client_payload.feed == 'both'))
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-        run: python new_arc_checker.py
-
       # PAID feed → Novel threads
       - name: Run Paid Chapters Bot
         if: >
