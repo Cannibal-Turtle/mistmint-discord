@@ -2,16 +2,19 @@
   "free": {
     "feed_key": "free_feed",
     "last_guid_key": "free_last_guid",
-    "seen_key": "free_seen_guids"
+    "seen_key": "free_seen_guids",
+    "last_post_time_key": "last_post_time_free"
   },
   "paid": {
     "feed_key": "paid_feed",
     "last_guid_key": "paid_last_guid",
-    "seen_key": "paid_seen_guids"
+    "seen_key": "paid_seen_guids",
+    "last_post_time_key": "last_post_time_paid"
   },
   "comments": {
     "feed_key": "comments_feed",
     "seen_key": "comments_seen_guids"
   },
-  "seen_cap": 500
+  "seen_cap": 500,
+  "time_backstop": true
 }

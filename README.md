@@ -279,7 +279,8 @@ Mistmint server-level settings:
   "ping_user_id": "603578473814032414",
   "auto_archive_allowed": [60, 1440, 4320, 10080],
   "default_auto_archive_minutes": 10080,
-  "announce_first_arc_release": false
+  "announce_first_arc_release": false,
+  "announce_first_chapter_release": true
 }
 ```
 
@@ -292,6 +293,7 @@ Mistmint server-level settings:
 | `auto_archive_allowed` | Allowed Discord thread archive durations |
 | `default_auto_archive_minutes` | Default auto-archive value for thread handling |
 | `announce_first_arc_release` | If `true`, allows the first detected arc to post a first-arc launch announcement after the new novel launch has been recorded |
+| `announce_first_chapter_release` | If `true`, allows the first detected chapter to post an announcement after the new novel launch has been recorded |
 
 ---
 
@@ -582,17 +584,11 @@ history_file = ""
 
 The checker safely skips it.
 
-### First Arc Launch Announcement Switch
+### First Arc/Chapter Launch Announcement Switch
 
 By default, the arc checker treats the first detected arc as a bootstrap setup step. This prevents old or existing Arc 1 data from being announced accidentally when arc tracking is first added.
 
 The switch lives in `config/server.json`:
-
-```json
-"announce_first_arc_release": false
-```
-
-Default behavior:
 
 ```json
 "announce_first_arc_release": false

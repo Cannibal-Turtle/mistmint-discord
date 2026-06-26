@@ -5,6 +5,8 @@ import re
 import json
 import asyncio
 import feedparser
+from datetime import datetime, timezone
+from dateutil import parser as dateparser
 
 import discord
 
@@ -30,8 +32,10 @@ STATE_FILE = require_file_value("rss_state_path")
 FEED_KEY   = require_feed_value("paid", "last_guid_key")
 RSS_URL    = require_feed_url("paid")
 
-SEEN_KEY = require_feed_value("paid", "seen_key")
-SEEN_CAP = int(require_feeds_value("seen_cap"))
+SEEN_KEY       = require_feed_value("paid", "seen_key")
+LAST_POST_TIME = require_feed_value("paid", "last_post_time_key")
+SEEN_CAP       = int(require_feeds_value("seen_cap"))
+TIME_BACKSTOP  = bool(require_feeds_value("time_backstop"))
 
 HOST_NAME_TARGET = require_server_value("host_target")
 AUTHOR_URL       = require_server_value("author_url")
@@ -145,13 +149,23 @@ def load_state():
             "free_last_guid": None,
             "paid_last_guid": None,
             "comments_seen_guids": [],
-            SEEN_KEY: []
+            SEEN_KEY: [],
+            LAST_POST_TIME: None,
         }
         save_state(st)
         return st
 
+    changed = False
+
     if SEEN_KEY not in st:
         st[SEEN_KEY] = []
+        changed = True
+
+    if LAST_POST_TIME not in st:
+        st[LAST_POST_TIME] = None
+        changed = True
+
+    if changed:
         save_state(st)
 
     return st
@@ -164,6 +178,21 @@ def save_state(state):
 
 def _norm(s): return (s or "").strip()
 def _guid(e): return _norm(e.get("guid") or e.get("id")) or None
+
+def normalize_guid(entry):
+    guid = _guid(entry)
+    return f"{HOST_NAME_TARGET}::{guid}" if guid else ""
+
+
+def parse_pub_iso(entry):
+    pub_raw = getattr(entry, "published", None)
+    if not pub_raw:
+        return None
+    try:
+        return dateparser.parse(pub_raw)
+    except Exception:
+        return None
+    
 
 def _is_target_host(e):
     host = _norm(e.get("host") or e.get("Host") or e.get("HOST"))
@@ -181,6 +210,67 @@ def _thread_id_for(short_code):
     except (TypeError, ValueError):
         return None
 
+def setting_bool(env_name: str, server_key: str, default: bool = True) -> bool:
+    raw = os.getenv(env_name)
+    if raw is None:
+        try:
+            raw = require_server_value(server_key)
+        except RuntimeError:
+            return default
+
+    if isinstance(raw, bool):
+        return raw
+
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def first_chapter_release_enabled() -> bool:
+    return setting_bool(
+        "ANNOUNCE_FIRST_CHAPTER_RELEASE",
+        "announce_first_chapter_release",
+        True,
+    )
+
+
+def _clean_compare(s: str) -> str:
+    s = (s or "").replace("\u00A0", " ").strip().lower()
+    return re.sub(r"\s+", " ", s)
+
+
+def is_probable_first_paid_chapter(entry) -> bool:
+    raw_chap = entry.get("chapter") or ""
+    raw_extend = entry.get("chaptername") or ""
+
+    fields = [_clean_compare(raw_chap), _clean_compare(raw_extend)]
+    text = " ".join(x for x in fields if x)
+
+    if not text:
+        return False
+
+    if "prologue" in text:
+        return True
+
+    if re.search(r"\bch(?:apter)?\.?\s*0*1\b", text):
+        return True
+
+    if re.search(r"\bep(?:isode)?\.?\s*0*1\b", text):
+        return True
+
+    if re.search(r"(?:^|\s)1[．\.]\s*0*1\b", text):
+        return True
+
+    for field in fields:
+        if re.fullmatch(r"0*1", field):
+            return True
+
+    return False
+
+
+def should_hold_first_paid_chapter(entry) -> bool:
+    if first_chapter_release_enabled():
+        return False
+
+    return is_probable_first_paid_chapter(entry)
 
 # ── Paid coin button helpers ───────────────────────────────────────────────────
 def parse_custom_emoji(e: str):
@@ -245,7 +335,29 @@ async def send_new_paid_entries():
     all_ents = list(reversed(feed.entries))              # oldest → newest
     entries  = [e for e in all_ents if _is_target_host(e)]  # Target host-only
 
-    to_send = entries
+    seen = set(state.get(SEEN_KEY, []))
+    last_post_time = state.get(LAST_POST_TIME)
+    last_post_dt = (
+        dateparser.parse(last_post_time)
+        if (TIME_BACKSTOP and last_post_time)
+        else None
+    )
+
+    to_send = []
+    for e in entries:
+        norm = normalize_guid(e)
+        if not norm:
+            continue
+
+        if norm in seen:
+            continue
+
+        if last_post_dt is not None:
+            dt = parse_pub_iso(e)
+            if dt and dt <= last_post_dt:
+                continue
+
+        to_send.append(e)
 
     if not to_send:
         print(f"🛑 No new {HOST_NAME_TARGET} paid chapters—skipping Discord login.")
@@ -271,7 +383,7 @@ async def send_new_paid_entries():
             if not guid:
                 continue
         
-            norm = f"{HOST_NAME_TARGET}::{guid}"
+            norm = normalize_guid(entry)
             if norm in state[SEEN_KEY]:
                 print(f"↷ Already sent, skipping {norm}")
                 continue
@@ -282,9 +394,16 @@ async def send_new_paid_entries():
                 continue
 
             # ── ARC CHECK BEFORE SENDING PAID CHAPTER ──
+            if should_hold_first_paid_chapter(entry):
+                print(
+                    f"⏳ Holding first paid chapter for {short_code} / {guid}: "
+                    "announce_first_chapter_release is false."
+                )
+                continue
+
             if is_arc_start_entry(entry):
                 thread_id_for_arc = _thread_id_for(short_code)
-            
+
                 if thread_id_for_arc:
                     print(f"🌸 Arc start detected for {_norm(entry.get('title'))}")
                     await asyncio.to_thread(process_arc_by_short_code, short_code, thread_id_for_arc)
@@ -348,7 +467,11 @@ async def send_new_paid_entries():
             
             state[SEEN_KEY].append(norm)
             state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
-            state["paid_last_guid"] = guid  # optional, debug only
+            state["paid_last_guid"] = guid
+
+            dt = parse_pub_iso(entry) or datetime.now(timezone.utc)
+            state[LAST_POST_TIME] = dt.isoformat()
+
             save_state(state)
 
         await asyncio.sleep(1)
