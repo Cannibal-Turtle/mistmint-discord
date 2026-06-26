@@ -8,6 +8,16 @@ on:
   repository_dispatch:
     types: [trigger-discord-notify]
   workflow_dispatch:
+    inputs:
+      feed:
+        description: "Which chapter workflow should run?"
+        type: choice
+        required: true
+        default: both
+        options:
+          - both
+          - free
+          - paid
 
 permissions:
   contents: write
@@ -36,7 +46,6 @@ jobs:
       # Does NOT post announcements, so it will not disrupt chapter order.
       - name: Sync Arc History
         if: >
-          github.event_name == 'schedule' ||
           github.event_name == 'workflow_dispatch' ||
           github.event_name == 'repository_dispatch'
         timeout-minutes: 10
@@ -49,9 +58,8 @@ jobs:
       # FREE feed → Novel threads
       - name: Run Free Chapters Bot
         if: >
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_dispatch' ||
-          (github.event_name == 'repository_dispatch' && github.event.client_payload.feed == 'free')
+          (github.event_name == 'workflow_dispatch' && (inputs.feed == 'free' || inputs.feed == 'both')) ||
+          (github.event_name == 'repository_dispatch' && (github.event.client_payload.feed == 'free' || github.event.client_payload.feed == 'both'))
         timeout-minutes: 5
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
@@ -61,9 +69,8 @@ jobs:
       # PAID feed → Novel threads
       - name: Run Paid Chapters Bot
         if: >
-          github.event_name == 'schedule' ||
-          github.event_name == 'workflow_dispatch' ||
-          (github.event_name == 'repository_dispatch' && github.event.client_payload.feed == 'paid')
+          (github.event_name == 'workflow_dispatch' && (inputs.feed == 'paid' || inputs.feed == 'both')) ||
+          (github.event_name == 'repository_dispatch' && (github.event.client_payload.feed == 'paid' || github.event.client_payload.feed == 'both'))
         timeout-minutes: 15
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
