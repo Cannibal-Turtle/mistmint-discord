@@ -446,7 +446,7 @@ async def send_new_paid_entries():
             label_text, emoji_obj = get_coin_button_parts(ctx["coin"])
             
             ctx.update({
-                "chapter_author_url": (
+                "translator_url": (
                     ctx.get("translator_url", "")
                     or get_translator_url(ctx.get("host") or HOST_NAME_TARGET, ctx.get("title", ""))
                     or TRANSLATOR_URL
