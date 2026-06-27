@@ -413,8 +413,6 @@ discord_color = "#c90016"
 translator_url = ""
 ```
 
--# `translator_url` is optional. Only add it when this novel needs a different translator/profile URL from the host-level mapping.
-
 ### In `mistmint-discord/config/thread_id_map.json`
 
 Only Mistmint thread routing:
