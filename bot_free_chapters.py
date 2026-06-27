@@ -9,6 +9,7 @@ import discord
 
 from message_context import build_feed_context
 from message_renderer import render_message, to_discord_py_kwargs
+from guid_state import entry_guid_identity, format_seen_guid, raw_guid_from_entry, seen_guid_identities
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
@@ -325,8 +326,7 @@ async def ensure_thread_ready(thread_or_channel) -> bool:
 _guid = lambda e: _norm(e.get("guid") or e.get("id")) or None
 
 def normalize_guid(entry):
-    guid = _guid(entry)
-    return f"{HOST_NAME_TARGET}::{guid}" if guid else ""
+    return format_seen_guid(entry, default_host='Mistmint Haven')
 
 def parse_pub_iso(entry):
     pub_raw = getattr(entry, "published", None)
@@ -356,7 +356,7 @@ async def send_new_entries():
     all_ents = list(reversed(feed.entries))            # oldest → newest
     entries  = [e for e in all_ents if _is_target_host(e)]
 
-    seen = set(state.get(SEEN_KEY, []))
+    seen = seen_guid_identities(state.get(SEEN_KEY, []))
     last_post_time = state.get(LAST_POST_TIME)
     last_post_dt = (
         dateparser.parse(last_post_time)
@@ -366,11 +366,11 @@ async def send_new_entries():
 
     to_send = []
     for e in entries:
-        norm = normalize_guid(e)
-        if not norm:
+        guid_key = entry_guid_identity(e)
+        if not guid_key:
             continue
 
-        if norm in seen:
+        if guid_key in seen:
             continue
 
         if last_post_dt is not None:
@@ -396,8 +396,9 @@ async def send_new_entries():
             if not guid:
                 continue
         
+            guid_key = entry_guid_identity(entry)
             norm = normalize_guid(entry)
-            if norm in state[SEEN_KEY]:
+            if guid_key in seen:
                 print(f"↷ Already sent, skipping {norm}")
                 continue
                 
@@ -452,11 +453,12 @@ async def send_new_entries():
             chapter = ctx["chapter"]
 
             state[SEEN_KEY].append(norm)
+            seen.add(guid_key)
             state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
-            state["free_last_guid"] = guid
 
             dt = parse_pub_iso(entry) or datetime.now(timezone.utc)
             state[LAST_POST_TIME] = dt.isoformat()
+            state[FEED_KEY] = raw_guid_from_entry(entry)
 
             save_state(state)
 

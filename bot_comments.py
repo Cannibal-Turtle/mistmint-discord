@@ -30,6 +30,7 @@ import feedparser
 
 from message_context import build_feed_context
 from message_renderer import render_message, to_discord_api_payload
+from guid_state import entry_guid_identity, format_seen_guid, raw_guid_from_entry, seen_guid_identities
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
@@ -110,9 +111,7 @@ def save_state(state):
 
 
 def normalize_guid(entry):
-    host = (entry.get("host") or "").strip()
-    guid = (entry.get("guid") or entry.get("id") or "").strip()
-    return f"{host}::{guid}" if guid else ""
+    return format_seen_guid(entry, default_host="Mistmint Haven")
 
 
 def parse_pub_iso(entry):
@@ -337,7 +336,7 @@ def main():
     feed    = feedparser.parse(RSS_URL)
     entries = list(reversed(feed.entries))  # oldest → newest
 
-    seen = set(state.get(SEEN_KEY, []))
+    seen = seen_guid_identities(state.get(SEEN_KEY, []))
     last_post_time = state.get(LAST_POST_TIME)
     last_post_dt = (
         dateparser.parse(last_post_time)
@@ -353,16 +352,17 @@ def main():
         host = (e.get("host") or "").strip()
         is_nu = is_novel_updates_host(host)
 
-        norm = normalize_guid(e)
-        if not norm:
+        guid_key = entry_guid_identity(e)
+        if not guid_key:
             continue
 
-        if norm in seen:
+        if guid_key in seen:
             continue
 
         if is_nu and not include_nu_comments:
+            norm = normalize_guid(e)
             state[SEEN_KEY].append(norm)
-            seen.add(norm)
+            seen.add(guid_key)
             skipped_nu_comments += 1
             continue
 
@@ -393,10 +393,12 @@ def main():
         guid        = entry.get("guid") or entry.get("id")
         novel_title = (entry.get("title") or "").strip()
 
-        norm = normalize_guid(entry)
-        if norm in state[SEEN_KEY]:
-            print(f"↷ Already sent, skipping {norm}")
+        guid_key = entry_guid_identity(entry)
+        if guid_key in seen:
+            print(f"↷ Already sent, skipping {guid_key}")
             continue
+
+        norm = normalize_guid(entry)
 
         short_code = get_entry_short_code(entry)
         thread_id = resolve_thread_id(novel_title, short_code)
@@ -434,7 +436,8 @@ def main():
             print(f"✅ Sent comment {guid} → thread {thread_id}")
             
             state[SEEN_KEY].append(norm)
-            state[FEED_KEY] = guid
+            seen.add(guid_key)
+            state[FEED_KEY] = raw_guid_from_entry(entry)
 
             dt = parse_pub_iso(entry) or datetime.now(timezone.utc)
             state[LAST_POST_TIME] = dt.isoformat()
