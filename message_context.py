@@ -126,7 +126,7 @@ def build_feed_context(entry: Any) -> dict[str, Any]:
     Discord-specific placeholders after this, for example:
       ctx["role_mention"] = "<@&...>"
       ctx["global_mention"] = "@everyone"
-      ctx["chapter_author_url"] = AUTHOR_URL
+      ctx["chapter_author_url"] = translator_url
       ctx["button_label"] = "5"
       ctx["button_emoji"] = "<:host_currency:1433046707121422487>"
     """
@@ -166,6 +166,7 @@ def build_feed_context(entry: Any) -> dict[str, Any]:
         "description": norm(entry_get(entry, "description", default="")),
         "category": category,
         "translator": norm(entry_get(entry, "translator", default="")),
+        "translator_url": norm(entry_get(entry, "translator_url", "translatorUrl", "translatorurl", default="")),
         "short_code": short_code,
         "coin": norm(entry_get(entry, "coin", default="")),
 

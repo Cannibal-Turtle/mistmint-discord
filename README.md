@@ -274,7 +274,6 @@ Mistmint server-level settings:
 ```json
 {
   "host_target": "Mistmint Haven",
-  "author_url": "https://www.mistminthaven.com/account/@CannibalTurtle-5082",
   "global_mention": "||@everyone||",
   "ping_user_id": "603578473814032414",
   "auto_archive_allowed": [60, 1440, 4320, 10080],
@@ -287,13 +286,20 @@ Mistmint server-level settings:
 | Field | Purpose |
 | --- | --- |
 | `host_target` | Host filter. Usually `Mistmint Haven` |
-| `author_url` | Author/profile URL used in embeds |
 | `global_mention` | Global mention text used where appropriate |
 | `ping_user_id` | Optional user ID for admin/error pings |
 | `auto_archive_allowed` | Allowed Discord thread archive durations |
 | `default_auto_archive_minutes` | Default auto-archive value for thread handling |
 | `announce_first_arc_release` | If `true`, allows the first detected arc to post a first-arc launch announcement after the new novel launch has been recorded |
 | `announce_first_chapter_release` | If `true`, allows the first detected chapter to post an announcement after the new novel launch has been recorded |
+
+Optional translator/profile URL fallback:
+
+```json
+"translator_url": "https://www.mistminthaven.com/account/@CannibalTurtle-5082"
+```
+
+This key can be left out. Scripts resolve the clickable translator/profile URL in this order: RSS `translator_url` → `rss-feed` mapping `translator_url` → optional `config/server.json` `translator_url` → empty string. Use `translator_url` only. Do not add `author_url`; that was the old name.
 
 ---
 
@@ -404,7 +410,10 @@ last_chapter = "Chapter 93"
 start_date = ""
 history_file = ""
 discord_color = "#c90016"
+translator_url = ""
 ```
+
+-# `translator_url` is optional. Only add it when this novel needs a different translator/profile URL from the host-level mapping.
 
 ### In `mistmint-discord/config/thread_id_map.json`
 
@@ -722,6 +731,7 @@ last_chapter = "Chapter 93"
 start_date = ""
 history_file = ""
 discord_color = "#c90016"
+translator_url = ""
 ```
 
 ### 2. Create or Get the Novel Thread
@@ -956,10 +966,11 @@ Also check that the novel host is Mistmint and the short code resolves.
 
 - This repo is Mistmint-only.
 - `novel_mappings.py` remains import-compatible.
-- Novel metadata lives in `rss-feed`.
+- Novel and translator metadata lives in `rss-feed`.
 - Thread routing lives in `config/thread_id_map.json`.
 - Embed colors live in `config/embeds.json`.
 - Server-level behavior lives in `config/server.json`.
+- `translator_url` in `config/server.json` is optional fallback only, not required.
 - `history_file = ""` safely means no arc tracking.
 - `start_date = ""` safely means no duration phrase in completion messages.
 - State files prevent duplicate announcements.

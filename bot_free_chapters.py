@@ -11,6 +11,12 @@ from message_context import build_feed_context
 from message_renderer import render_message, to_discord_py_kwargs
 from guid_state import entry_guid_identity, format_seen_guid, raw_guid_from_entry, seen_guid_identities
 
+try:
+    from novel_mappings import get_translator_url
+except Exception:
+    def get_translator_url(host, novel_title=""):
+        return ""
+
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
     THREAD_ID_MAP,
@@ -22,6 +28,7 @@ from config_loader import (
     require_feed_url,
     require_file_value,
     require_server_value,
+    server_value,
 )
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
@@ -33,8 +40,7 @@ FEED_KEY   = require_feed_value("free", "last_guid_key")
 RSS_URL    = require_feed_url("free")
 
 HOST_NAME_TARGET = require_server_value("host_target")
-AUTHOR_URL       = require_server_value("author_url")
-GLOBAL_MENTION   = require_server_value("global_mention")
+TRANSLATOR_URL = str(server_value("translator_url", "") or "").strip()
 
 SEEN_KEY       = require_feed_value("free", "seen_key")
 LAST_POST_TIME = require_feed_value("free", "last_post_time_key")
@@ -442,7 +448,11 @@ async def send_new_entries():
             
             ctx.update({
                 "global_mention": GLOBAL_MENTION,
-                "chapter_author_url": AUTHOR_URL,
+                "chapter_author_url": (
+                    ctx.get("translator_url", "")
+                    or get_translator_url(ctx.get("host") or HOST_NAME_TARGET, ctx.get("title", ""))
+                    or TRANSLATOR_URL
+                ),
             })
             
             payload = render_message("free_chapters", ctx)

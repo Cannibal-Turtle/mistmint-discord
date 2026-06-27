@@ -30,6 +30,12 @@ try:
 except Exception as e:
     print(f"⚠️ novel_mappings not available ({e}); using empty HOSTING_SITE_DATA.")
     HOSTING_SITE_DATA = {}
+
+try:
+    from novel_mappings import get_translator_url
+except Exception:
+    def get_translator_url(host, novel_title=""):
+        return ""
   
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
@@ -39,6 +45,7 @@ from config_loader import (
     env_bool,
     require_file_value,
     require_server_value,
+    server_value,
 )
 
 STATE_PATH     = require_file_value("state_path")
@@ -46,7 +53,7 @@ BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
 HOST_NAME_TARGET = require_server_value("host_target")
 GLOBAL_MENTION   = require_server_value("global_mention")
-AUTHOR_URL = require_server_value("author_url")
+TRANSLATOR_URL = str(server_value("translator_url", "") or "").strip()
 
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
@@ -286,11 +293,27 @@ def resolve_thread_id(novel_title: str, details: dict) -> str | None:
     return str(val) if val else None
 
 
+def get_entry_translator_url(entry) -> str:
+    for key in ("translator_url", "translatorUrl", "translatorurl"):
+        value = entry.get(key)
+        if value:
+            return str(value).strip()
+    return ""
+
+
 def build_completion_context(novel, chap_field, chap_link, duration: str = "") -> dict:
+    translator_url = (
+        novel.get("feed_translator_url", "")
+        or novel.get("translator_url", "")
+        or get_translator_url(novel.get("host", ""), novel.get("novel_title", ""))
+        or TRANSLATOR_URL
+    )
+
     return {
         "global_mention": GLOBAL_MENTION,
         "translator": novel.get("translator", ""),
-        "author_url": AUTHOR_URL,
+        "translator_url": translator_url,
+        "author_url": translator_url,
         "novel_title": novel.get("novel_title", ""),
         "novel_link": novel.get("novel_link", ""),
         "host": novel.get("host", ""),
@@ -331,8 +354,9 @@ def load_novels() -> list[dict]:
         if host != HOST_NAME_TARGET:
             continue
 
-        # default translator for this host
+        # default translator/profile for this host
         host_translator = host_data.get("translator", "")
+        host_translator_url = host_data.get("translator_url", "")
 
         for title, details in host_data.get("novels", {}).items():
             last = details.get("last_chapter")
@@ -355,6 +379,7 @@ def load_novels() -> list[dict]:
                 "short_code":       details.get("short_code", ""),  # used for thread env
                 # per-novel override, else host-level default
                 "translator":       details.get("translator") or host_translator,
+                "translator_url":   details.get("translator_url") or host_translator_url,
             })
     return novels
 
@@ -430,6 +455,7 @@ def main():
         
             # 2) use a clean title for display (prefer base)
             chap_display = base or chap_match
+            novel_for_message = dict(novel, feed_translator_url=get_entry_translator_url(entry))
 
             # compute a chapter timestamp for duration
             if entry.get("published_parsed"):
@@ -446,7 +472,7 @@ def main():
                     break
             
                 duration = get_duration(novel.get("start_date", ""), chap_date)
-                msg = build_only_free_completion(novel, chap_display, entry.link, duration)
+                msg = build_only_free_completion(novel_for_message, chap_display, entry.link, duration)
                 print(f"→ Built message of {len(msg.get('content', ''))} characters")
             
                 if safe_send_bot(bot_token, thread_id, msg):
@@ -468,7 +494,7 @@ def main():
                     break
             
                 duration = get_duration(novel.get("start_date", ""), chap_date)
-                msg = build_paid_completion(novel, chap_display, entry.link, duration)
+                msg = build_paid_completion(novel_for_message, chap_display, entry.link, duration)
                 print(f"→ Built message of {len(msg.get('content', ''))} characters")
             
                 if safe_send_bot(bot_token, thread_id, msg):
@@ -489,7 +515,7 @@ def main():
                     print(f"→ skipping {novel_id} (free_completion) — already notified")
                     break
             
-                msg = build_free_completion(novel, chap_display, entry.link)
+                msg = build_free_completion(novel_for_message, chap_display, entry.link)
                 print(f"→ Built message of {len(msg.get('content', ''))} characters")
             
                 if safe_send_bot(bot_token, thread_id, msg):

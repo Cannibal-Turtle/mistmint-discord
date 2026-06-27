@@ -52,12 +52,14 @@ from config_loader import (
     env_bool,
     require_file_value,
     require_server_value,
+    server_value,
 )
 
 STATE_PATH    = require_file_value("state_path")
 BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
 
 HOST_TARGET = require_server_value("host_target")
+TRANSLATOR_URL = str(server_value("translator_url", "") or "").strip()
 
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
@@ -79,6 +81,14 @@ def commit_state_update(path=STATE_PATH):
             print(f"⚠️ No changes detected in {path}, skipping commit.")
     except Exception as e:
         print(f"❌ Git commit/push for {path} failed: {e}")
+
+def get_entry_translator_url(entry) -> str:
+    for key in ("translator_url", "translatorUrl", "translatorurl"):
+        value = entry.get(key)
+        if value:
+            return str(value).strip()
+    return ""
+
 
 def load_state(path=STATE_PATH):
     try:
@@ -384,6 +394,7 @@ def load_novels_from_mapping():
             novels.append({
                 "host":             host_name,
                 "translator":       details.get("translator") or host_data.get("translator", ""),
+                "translator_url":   details.get("translator_url") or host_data.get("translator_url", ""),
                 "host_logo":        host_logo,
                 "novel_title":      novel_title,
                 "novel_url":        details.get("novel_url", ""),
@@ -481,6 +492,11 @@ def main():
                 "chapter_link": chap_link,
                 "host": host_name,
                 "translator": novel.get("translator", ""),
+                "translator_url": (
+                    get_entry_translator_url(entry)
+                    or novel.get("translator_url", "")
+                    or TRANSLATOR_URL
+                ),
                 "description": desc_text,
                 "featured_image_url": novel.get("featured_image", ""),
                 "host_logo_url": novel.get("host_logo", ""),

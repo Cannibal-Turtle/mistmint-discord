@@ -1,6 +1,5 @@
 {
   "host_target": "Mistmint Haven",
-  "author_url": "https://www.mistminthaven.com/account/@CannibalTurtle-5082",
   "global_mention": "||@everyone||",
   "ping_user_id": "603578473814032414",
   "auto_archive_allowed": [60, 1440, 4320, 10080],

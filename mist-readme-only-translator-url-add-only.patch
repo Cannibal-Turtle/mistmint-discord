@@ -1,0 +1,19 @@
+--- a/README.md
++++ b/README.md
+@@ -295,6 +295,8 @@
+ | `announce_first_arc_release` | If `true`, allows the first detected arc to post a first-arc launch announcement after the new novel launch has been recorded |
+ | `announce_first_chapter_release` | If `true`, allows the first detected chapter to post an announcement after the new novel launch has been recorded |
+ 
++Translator/profile URL lookup order is RSS `translator_url`, then `rss-feed` mapping `translator_url`, then optional `config/server.json` `translator_url`, then empty string. The URL is optional; if no URL exists, the embed author name is simply not clickable.
++
+ ---
+ 
+ ### `config/thread_id_map.json`
+@@ -960,6 +962,7 @@
+ - Thread routing lives in `config/thread_id_map.json`.
+ - Embed colors live in `config/embeds.json`.
+ - Server-level behavior lives in `config/server.json`.
++- Translator/profile URL lookup is RSS `translator_url` → `rss-feed` mapping `translator_url` → optional `config/server.json` `translator_url` → empty string.
+ - `history_file = ""` safely means no arc tracking.
+ - `start_date = ""` safely means no duration phrase in completion messages.
+ - State files prevent duplicate announcements.
