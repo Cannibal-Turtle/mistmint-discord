@@ -21,6 +21,12 @@ except Exception:
     def get_translator_url(host, novel_title=""):
         return ""
 
+try:
+    from novel_mappings import get_coin_emoji
+except Exception:
+    def get_coin_emoji(host):
+        return ""
+
 # ─── CONFIG (no fallback channel) ──────────────────────────────────────────────
 from config_loader import (
     THREAD_ID_MAP,
@@ -294,19 +300,37 @@ def parse_custom_emoji(e: str):
     return None
 
 
-def get_coin_button_parts(fallback_price: str):
-    label_text, emoji_obj = "", None
+def get_coin_button_parts(fallback_price: str, host: str = ""):
+    label_text = ""
+    emoji_obj = None
 
     coin_text = (fallback_price or "").strip()
-    if coin_text:
-        m = re.match(r"^(?P<emoji><a?:[A-Za-z0-9_]+:\d+>)?\s*(?P<num>\d+)?", coin_text)
-        if m:
-            emoji_obj = parse_custom_emoji((m.group("emoji") or "").strip())
-            num = (m.group("num") or "").strip()
-            if num:
-                label_text = num
+    if not coin_text:
+        return "Read here", None
 
-    if not label_text and not emoji_obj:
+    # New feed shape: <coin>5</coin>. The emoji is Discord presentation,
+    # so get it from rss-feed host mappings instead of storing it in <coin>.
+    mapped_emoji = parse_custom_emoji(get_coin_emoji(host))
+    if mapped_emoji:
+        emoji_obj = mapped_emoji
+
+    # Backward compatible with old feed shape: <coin><:emoji:id> 5</coin>.
+    m = re.match(r"^(?P<emoji><a?:[A-Za-z0-9_]+:\d+>)?\s*(?P<num>\d+)?", coin_text)
+    if m:
+        feed_emoji = parse_custom_emoji((m.group("emoji") or "").strip())
+        if feed_emoji:
+            emoji_obj = feed_emoji
+
+        num = (m.group("num") or "").strip()
+        if num:
+            label_text = num
+
+    if not label_text:
+        mnum = re.search(r"\d+", coin_text)
+        if mnum:
+            label_text = mnum.group(0)
+
+    if not label_text:
         label_text = "Read here"
 
     return label_text, emoji_obj
@@ -443,7 +467,10 @@ async def send_new_paid_entries():
 
             ctx = build_feed_context(entry)
             
-            label_text, emoji_obj = get_coin_button_parts(ctx["coin"])
+            label_text, emoji_obj = get_coin_button_parts(
+                ctx["coin"],
+                ctx.get("host") or HOST_NAME_TARGET,
+            )
             
             ctx.update({
                 "translator_url": (
