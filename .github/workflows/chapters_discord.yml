@@ -76,7 +76,7 @@ jobs:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: python bot_paid_chapters.py
 
-      - name: Sync & commit state_rss.json
+      - name: Commit state
         if: ${{ always() }}
         shell: bash
         run: |
@@ -84,7 +84,9 @@ jobs:
           git add state_rss.json
           if git diff --cached --quiet; then
             echo "No state changes to commit."
-          else
-            git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' commit -m "ci: update state_rss.json"
-            git push
+            exit 0
           fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: update state_rss.json"
+          git push
