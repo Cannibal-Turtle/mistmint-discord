@@ -44,12 +44,20 @@ jobs:
 
       - name: Commit updated state.json
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main || echo "nothing to rebase"
+
+          git pull --rebase --autostash origin main
+
           git add state.json
-          git commit -m "ci: update extras state" || echo "No changes"
-          git push
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: update state.json"
+          git push origin HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -87,12 +95,20 @@ jobs:
 
       - name: Commit updated state.json
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main || echo "nothing to rebase"
+
+          git pull --rebase --autostash origin main
+
           git add state.json
-          git commit -m "ci: update completion state" || echo "No changes"
-          git push
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: update state.json"
+          git push origin HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -129,12 +145,20 @@ jobs:
 
       - name: Commit updated state.json
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main || echo "nothing to rebase"
+
+          git pull --rebase --autostash origin main
+
           git add state.json
-          git commit -m "ci: update completion state" || echo "No changes"
-          git push
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: update state.json"
+          git push origin HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -171,11 +195,19 @@ jobs:
 
       - name: Commit updated state.json
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main || echo "nothing to rebase"
+
+          git pull --rebase --autostash origin main
+
           git add state.json
-          git commit -m "ci: update launch state" || echo "No changes"
-          git push
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: update state.json"
+          git push origin HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
