@@ -77,6 +77,7 @@ jobs:
         run: python bot_paid_chapters.py
 
       - name: Sync & commit state_rss.json
+        if: ${{ always() }}
         shell: bash
         run: |
           git pull --rebase --autostash
