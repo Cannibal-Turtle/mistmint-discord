@@ -36,7 +36,8 @@ FEED_KEY   = require_feed_value("free", "last_guid_key")
 RSS_URL    = require_feed_url("free")
 
 HOST_NAME_TARGET = require_server_value("host_target")
-TRANSLATOR_URL = str(server_value("translator_url", "") or "").strip()
+GLOBAL_MENTION   = require_server_value("global_mention")
+TRANSLATOR_URL   = str(server_value("translator_url", "") or "").strip()
 
 SEEN_KEY       = require_feed_value("free", "seen_key")
 LAST_POST_TIME = require_feed_value("free", "last_post_time_key")
