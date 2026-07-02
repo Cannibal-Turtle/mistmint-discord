@@ -24,6 +24,7 @@ import requests
 from dateutil.relativedelta import relativedelta
 
 from message_renderer import render_message, to_discord_api_payload
+from guid_state import entry_guid_identity, format_seen_guid, seen_guid_identities
 
 try:
     from novel_mappings import HOSTING_SITE_DATA
@@ -43,12 +44,14 @@ from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
     env_bool,
+    require_feed_value,
     require_file_value,
     require_server_value,
     server_value,
 )
 
 STATE_PATH     = require_file_value("state_path")
+RSS_STATE_PATH = require_file_value("rss_state_path")
 BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
 HOST_NAME_TARGET = require_server_value("host_target")
@@ -301,6 +304,159 @@ def get_entry_translator_url(entry) -> str:
     return ""
 
 
+def _entry_chapter_text(entry) -> str:
+    """Text used for chapter matching."""
+    parts = []
+    for key in ("chapter", "chaptername", "volume"):
+        value = (entry.get(key) or "").replace("\u00A0", " ").strip()
+        if value:
+            parts.append(value)
+    return " ".join(parts).strip()
+
+
+def _entry_display_text(entry, *, prefer_full: bool = False) -> str:
+    base = (entry.get("chapter") or "").replace("\u00A0", " ").strip()
+    full = _entry_chapter_text(entry)
+    if prefer_full and full:
+        return full
+    return base or full
+
+
+def _entry_sort_key(entry, fallback_index: int = 0):
+    """Best-effort newest sorting for RSS entries."""
+    parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+    if parsed:
+        try:
+            return datetime(*parsed[:6]).timestamp()
+        except Exception:
+            pass
+    # feed entries are normally newest -> oldest, so earlier index is newer
+    return -fallback_index
+
+
+def _matching_title_entries(feed, novel_id: str):
+    """Keep only entries for this novel, but allow feeds that omit title."""
+    out = []
+    for idx, entry in enumerate(feed.entries):
+        entry_title = (entry.get("title") or "").strip()
+        if entry_title and entry_title != novel_id:
+            continue
+        out.append((idx, entry))
+    return out
+
+
+def _extract_bonus_totals(chapter_count: str) -> tuple[int, int]:
+    """Return (extras_total, side_stories_total) from chapter_count text."""
+    text = chapter_count or ""
+    m_ex = re.search(r"(\d+)\s*extras?", text, re.IGNORECASE)
+    m_ss = re.search(r"(\d+)\s*(?:side story|side stories)", text, re.IGNORECASE)
+    return (int(m_ex.group(1)) if m_ex else 0, int(m_ss.group(1)) if m_ss else 0)
+
+
+def _find_bonus_entries(indexed_entries, raw_kw: str):
+    """Return [(number, entry, index)] for entries like Extra 1 / Side Story 2."""
+    if not raw_kw:
+        return []
+
+    if raw_kw.lower() == "side story":
+        keyword = r"side\s+stor(?:y|ies)"
+    else:
+        keyword = rf"{re.escape(raw_kw)}s?"
+
+    pattern = re.compile(rf"(?i)\b{keyword}\b.*?(\d+)")
+    found = []
+    for idx, entry in indexed_entries:
+        for field in ("chapter", "chaptername", "volume"):
+            value = entry.get(field, "") or ""
+            match = pattern.search(value)
+            if match:
+                found.append((int(match.group(1)), entry, idx))
+                break
+    return found
+
+
+def _latest_entry(items):
+    if not items:
+        return None
+    # items are (number, entry, index)
+    return max(items, key=lambda item: _entry_sort_key(item[1], item[2]))[1]
+
+
+def _completion_target_entry(feed, novel: dict, feed_type: str):
+    """
+    Decide which feed entry is allowed to trigger completion.
+
+    Normal novels complete on configured last_chapter.
+    Novels whose chapter_count includes extras / side stories complete only after
+    the final configured bonus entry exists in this feed.
+    """
+    novel_id = novel["novel_title"]
+    indexed_entries = _matching_title_entries(feed, novel_id)
+
+    total_extras, total_side_stories = _extract_bonus_totals(novel.get("chapter_count", ""))
+    if total_extras or total_side_stories:
+        extra_entries = _find_bonus_entries(indexed_entries, "extra")
+        side_story_entries = _find_bonus_entries(indexed_entries, "side story")
+
+        max_extra = max((num for num, _entry, _idx in extra_entries), default=0)
+        max_side_story = max((num for num, _entry, _idx in side_story_entries), default=0)
+
+        missing = []
+        if total_extras and max_extra < total_extras:
+            missing.append(f"Extra {total_extras}")
+        if total_side_stories and max_side_story < total_side_stories:
+            missing.append(f"Side Story {total_side_stories}")
+
+        if missing:
+            return None, "bonus", (
+                f"⏳ Holding {feed_type} completion for {novel_id}: "
+                f"waiting for final bonus entry/entries in RSS ({', '.join(missing)})."
+            )
+
+        final_bonus_entries = []
+        if total_extras:
+            final_bonus_entries.extend(item for item in extra_entries if item[0] == total_extras)
+        if total_side_stories:
+            final_bonus_entries.extend(item for item in side_story_entries if item[0] == total_side_stories)
+
+        target = _latest_entry(final_bonus_entries)
+        if target is None:
+            return None, "bonus", (
+                f"⏳ Holding {feed_type} completion for {novel_id}: "
+                "chapter_count says there is bonus content, but no final bonus RSS entry was found."
+            )
+        return target, "bonus", ""
+
+    last_chap = novel.get("last_chapter") or ""
+    for _idx, entry in indexed_entries:
+        if last_chap and last_chap in _entry_chapter_text(entry):
+            return entry, "chapter", ""
+
+    return None, "chapter", f"→ no configured last_chapter found yet for {novel_id} in {feed_type} feed"
+
+
+def _rss_seen_identities(feed_type: str) -> set[str]:
+    rss_state = load_state(RSS_STATE_PATH)
+    seen_key = require_feed_value(feed_type, "seen_key")
+    return seen_guid_identities(rss_state.get(seen_key, []))
+
+
+def _entry_was_already_announced(feed_type: str, entry, label: str) -> bool:
+    guid_key = entry_guid_identity(entry)
+    if not guid_key:
+        print(f"⏳ Holding {label}: target RSS entry has no GUID, so chapter-send state cannot be verified.")
+        return False
+
+    if guid_key in _rss_seen_identities(feed_type):
+        return True
+
+    print(
+        f"⏳ Holding {label}: {format_seen_guid(entry, default_host=HOST_NAME_TARGET)} "
+        f"is not in state_rss.json::{require_feed_value(feed_type, 'seen_key')} yet."
+    )
+    return False
+
+
 def build_completion_context(novel, chap_field, chap_link, duration: str = "") -> dict:
     translator_url = (
         novel.get("feed_translator_url", "")
@@ -436,98 +592,89 @@ def main():
         feed = feedparser.parse(resp.text)
         print(f"Parsing {feed_key} for {novel_id}: {len(feed.entries)} entries")
 
-        # Search for the last_chapter marker in feed entries
-        for entry in feed.entries:
-            # (optional) guard by novel title if using shared feed
-            entry_title = (entry.get("title") or "").strip()
-            if entry_title and entry_title != novel_id:
-                continue
-        
-            base = entry.get("chapter") or entry.get("chapter", "") or ""
-            ext  = entry.get("chaptername") or ""
-        
-            # 1) use combined string only for matching
-            chap_match = f"{base} {ext}".strip()
-        
-            if last_chap not in chap_match:
-                continue
-        
-            # 2) use a clean title for display (prefer base)
-            chap_display = base or chap_match
-            novel_for_message = dict(novel, feed_translator_url=get_entry_translator_url(entry))
+        entry, target_kind, hold_reason = _completion_target_entry(feed, novel, feed_type)
+        if not entry:
+            print(hold_reason)
+            continue
 
-            # compute a chapter timestamp for duration
-            if entry.get("published_parsed"):
-                chap_date = datetime(*entry.published_parsed[:6])
-            elif entry.get("updated_parsed"):
-                chap_date = datetime(*entry.updated_parsed[:6])
+        label = f"{feed_type} completion for {novel_id}"
+        if not _entry_was_already_announced(feed_type, entry, label):
+            continue
+
+        prefer_full_display = target_kind == "bonus"
+        chap_display = _entry_display_text(entry, prefer_full=prefer_full_display)
+        chapter_link = entry.get("link", "")
+        novel_for_message = dict(novel, feed_translator_url=get_entry_translator_url(entry))
+
+        # compute a chapter timestamp for duration
+        if entry.get("published_parsed"):
+            chap_date = datetime(*entry.published_parsed[:6])
+        elif entry.get("updated_parsed"):
+            chap_date = datetime(*entry.updated_parsed[:6])
+        else:
+            chap_date = datetime.now()
+
+        # ONLY-FREE (series with no paid feed at all)
+        if feed_type == "free" and not novel.get("paid_feed"):
+            if state.get(novel_id, {}).get("only_free_completion"):
+                print(f"→ skipping {novel_id} (only_free_completion) — already notified")
+                continue
+
+            duration = get_duration(novel.get("start_date", ""), chap_date)
+            msg = build_only_free_completion(novel_for_message, chap_display, chapter_link, duration)
+            print(f"→ Built message of {len(msg.get('content', ''))} characters")
+
+            if safe_send_bot(bot_token, thread_id, msg):
+                print(f"✔️ Sent only-free completion announcement for {novel_id} → thread {thread_id}")
+                state.setdefault(novel_id, {})["only_free_completion"] = {
+                    "chapter": chap_display,
+                    "sent_at": datetime.now().isoformat()
+                }
+                save_state(state)
+                commit_state_update(STATE_PATH)
             else:
-                chap_date = datetime.now()
+                print(f"→ Not marking {novel_id} as only_free_completion (send failed)")
 
-            # ONLY-FREE (series with no paid feed at all)
-            if feed_type == "free" and not novel.get("paid_feed"):
-                if state.get(novel_id, {}).get("only_free_completion"):
-                    print(f"→ skipping {novel_id} (only_free_completion) — already notified")
-                    break
-            
-                duration = get_duration(novel.get("start_date", ""), chap_date)
-                msg = build_only_free_completion(novel_for_message, chap_display, entry.link, duration)
-                print(f"→ Built message of {len(msg.get('content', ''))} characters")
-            
-                if safe_send_bot(bot_token, thread_id, msg):
-                    print(f"✔️ Sent only-free completion announcement for {novel_id} → thread {thread_id}")
-                    state.setdefault(novel_id, {})["only_free_completion"] = {
-                        "chapter": chap_display,
-                        "sent_at": datetime.now().isoformat()
-                    }
-                    save_state(state)
-                    commit_state_update(STATE_PATH)
-                else:
-                    print(f"→ Not marking {novel_id} as only_free_completion (send failed)")
-                break
-            
-            # PAID completion
-            elif feed_type == "paid":
-                if state.get(novel_id, {}).get("paid_completion"):
-                    print(f"→ skipping {novel_id} (paid_completion) — already notified")
-                    break
-            
-                duration = get_duration(novel.get("start_date", ""), chap_date)
-                msg = build_paid_completion(novel_for_message, chap_display, entry.link, duration)
-                print(f"→ Built message of {len(msg.get('content', ''))} characters")
-            
-                if safe_send_bot(bot_token, thread_id, msg):
-                    print(f"✔️ Sent paid-completion announcement for {novel_id} → thread {thread_id}")
-                    state.setdefault(novel_id, {})["paid_completion"] = {
-                        "chapter": chap_display,
-                        "sent_at": datetime.now().isoformat()
-                    }
-                    save_state(state)
-                    commit_state_update(STATE_PATH)
-                else:
-                    print(f"→ Not marking {novel_id} as paid_completion (send failed)")
-                break
-            
-            # STANDARD FREE completion (series that also had a paid feed)
-            elif feed_type == "free":
-                if state.get(novel_id, {}).get("free_completion"):
-                    print(f"→ skipping {novel_id} (free_completion) — already notified")
-                    break
-            
-                msg = build_free_completion(novel_for_message, chap_display, entry.link)
-                print(f"→ Built message of {len(msg.get('content', ''))} characters")
-            
-                if safe_send_bot(bot_token, thread_id, msg):
-                    print(f"✔️ Sent free-completion announcement for {novel_id} → thread {thread_id}")
-                    state.setdefault(novel_id, {})["free_completion"] = {
-                        "chapter": chap_display,
-                        "sent_at": datetime.now().isoformat()
-                    }
-                    save_state(state)
-                    commit_state_update(STATE_PATH)
-                else:
-                    print(f"→ Not marking {novel_id} as free_completion (send failed)")
-                break
+        # PAID completion
+        elif feed_type == "paid":
+            if state.get(novel_id, {}).get("paid_completion"):
+                print(f"→ skipping {novel_id} (paid_completion) — already notified")
+                continue
+
+            duration = get_duration(novel.get("start_date", ""), chap_date)
+            msg = build_paid_completion(novel_for_message, chap_display, chapter_link, duration)
+            print(f"→ Built message of {len(msg.get('content', ''))} characters")
+
+            if safe_send_bot(bot_token, thread_id, msg):
+                print(f"✔️ Sent paid-completion announcement for {novel_id} → thread {thread_id}")
+                state.setdefault(novel_id, {})["paid_completion"] = {
+                    "chapter": chap_display,
+                    "sent_at": datetime.now().isoformat()
+                }
+                save_state(state)
+                commit_state_update(STATE_PATH)
+            else:
+                print(f"→ Not marking {novel_id} as paid_completion (send failed)")
+
+        # STANDARD FREE completion (series that also had a paid feed)
+        elif feed_type == "free":
+            if state.get(novel_id, {}).get("free_completion"):
+                print(f"→ skipping {novel_id} (free_completion) — already notified")
+                continue
+
+            msg = build_free_completion(novel_for_message, chap_display, chapter_link)
+            print(f"→ Built message of {len(msg.get('content', ''))} characters")
+
+            if safe_send_bot(bot_token, thread_id, msg):
+                print(f"✔️ Sent free-completion announcement for {novel_id} → thread {thread_id}")
+                state.setdefault(novel_id, {})["free_completion"] = {
+                    "chapter": chap_display,
+                    "sent_at": datetime.now().isoformat()
+                }
+                save_state(state)
+                commit_state_update(STATE_PATH)
+            else:
+                print(f"→ Not marking {novel_id} as free_completion (send failed)")
 
 
 if __name__ == "__main__":

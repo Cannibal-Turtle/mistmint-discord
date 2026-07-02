@@ -29,6 +29,7 @@ import feedparser
 import time
 import subprocess
 from message_renderer import render_message, to_discord_api_payload
+from guid_state import entry_guid_identity, format_seen_guid, seen_guid_identities
 from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
@@ -36,13 +37,15 @@ from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
     env_bool,
+    require_feed_value,
     require_file_value,
     require_server_value,
 )
 
-STATE_PATH    = require_file_value("state_path")
-HOST_TARGET   = require_server_value("host_target")
-BOT_TOKEN_ENV = "DISCORD_BOT_TOKEN"
+STATE_PATH     = require_file_value("state_path")
+RSS_STATE_PATH = require_file_value("rss_state_path")
+HOST_TARGET    = require_server_value("host_target")
+BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
@@ -217,20 +220,67 @@ def save_state(state, path=STATE_PATH):
 
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
-def find_released_extras(paid_feed, raw_kw):
-    """Find max index released for a given keyword group (extra / side story)."""
+def find_released_extra_entries(paid_feed, raw_kw):
+    """Return [(number, entry)] for a given keyword group (extra / side story)."""
     if not raw_kw:
-        return set()
+        return []
+
     # capture a trailing number after the keyword
-    pattern = re.compile(rf"(?i)\b{raw_kw}s?\b.*?(\d+)")
-    seen = set()
+    if raw_kw.lower() == "side story":
+        keyword = r"side\s+stor(?:y|ies)"
+    else:
+        keyword = rf"{re.escape(raw_kw)}s?"
+
+    pattern = re.compile(rf"(?i)\b{keyword}\b.*?(\d+)")
+    found = []
     for e in paid_feed.entries:
         for field in ("chapter", "chaptername", "volume"):
             val = e.get(field, "") or ""
             m = pattern.search(val)
             if m:
-                seen.add(int(m.group(1)))
-    return seen
+                found.append((int(m.group(1)), e))
+                break
+    return found
+
+
+def find_released_extras(paid_feed, raw_kw):
+    """Find max index released for a given keyword group (extra / side story)."""
+    return {number for number, _entry in find_released_extra_entries(paid_feed, raw_kw)}
+
+
+def load_rss_state():
+    return load_state(RSS_STATE_PATH)
+
+
+def paid_seen_guid_identities() -> set[str]:
+    rss_state = load_rss_state()
+    seen_key = require_feed_value("paid", "seen_key")
+    return seen_guid_identities(rss_state.get(seen_key, []))
+
+
+def _release_number_has_been_announced(entries, number: int, label: str, novel_id: str) -> bool:
+    """
+    True only after the actual paid chapter entry for this extra/side story
+    has already been posted by bot_paid_chapters.py and recorded in state_rss.json.
+    """
+    matches = [entry for n, entry in entries if n == number]
+    if not matches:
+        print(f"⏳ Holding extras announcement for {novel_id}: {label} {number} is not in the paid RSS yet.")
+        return False
+
+    seen = paid_seen_guid_identities()
+    seen_key = require_feed_value("paid", "seen_key")
+    for entry in matches:
+        guid_key = entry_guid_identity(entry)
+        if guid_key and guid_key in seen:
+            return True
+
+    pretty = format_seen_guid(matches[0], default_host=HOST_TARGET)
+    print(
+        f"⏳ Holding extras announcement for {novel_id}: {pretty} "
+        f"is not in state_rss.json::{seen_key} yet."
+    )
+    return False
 
 def sanitize_shortcode_from_title(title: str) -> str:
     """Fallback SHORTCODE from title (A–Z/0–9 only)."""
@@ -275,13 +325,8 @@ def process_extras(novel: dict):
     paid_feed.entries = filtered
     print(f"🔐 Title-guarded extras feed for {novel_title}: {len(filtered)} entries kept")
 
-    # If paid feed already contains the configured last_chapter, skip extras flow
-    last_chap = novel.get("last_chapter", "")
-    for e in paid_feed.entries:
-        chap = f"{(e.get('chapter') or '')}{(e.get('chaptername') or '')}"
-        if last_chap and last_chap in chap:
-            print(f"→ skipping extras for {novel['novel_id']} — final chapter present in feed")
-            return
+    # Do not skip just because the main final chapter is still visible in RSS.
+    # Extras often appear while that final-chapter entry is still inside the feed window.
 
     # 2) load state & guard against completion
     state    = load_state()
@@ -292,8 +337,10 @@ def process_extras(novel: dict):
         return
 
     # 3) see what actually dropped
-    dropped_extras = find_released_extras(paid_feed, "extra")
-    dropped_ss     = find_released_extras(paid_feed, "side story")
+    extra_entries = find_released_extra_entries(paid_feed, "extra")
+    ss_entries    = find_released_extra_entries(paid_feed, "side story")
+    dropped_extras = {number for number, _entry in extra_entries}
+    dropped_ss     = {number for number, _entry in ss_entries}
     max_ex = max(dropped_extras) if dropped_extras else 0
     max_ss = max(dropped_ss)     if dropped_ss     else 0
 
@@ -306,6 +353,13 @@ def process_extras(novel: dict):
     current = max(max_ex, max_ss)
     if current <= last:
         print(f"→ no new extras/side stories for {novel_id} (last={last}, current={current})")
+        return
+
+    new_ex = max_ex > last
+    new_ss = max_ss > last
+    if new_ex and not _release_number_has_been_announced(extra_entries, max_ex, "Extra", novel_id):
+        return
+    if new_ss and not _release_number_has_been_announced(ss_entries, max_ss, "Side Story", novel_id):
         return
 
     # totals from mapping's chapter_count string
@@ -321,8 +375,6 @@ def process_extras(novel: dict):
     disp_label = " + ".join(parts) if parts else "BONUS CONTENT"
 
     # decide “dropped” wording
-    new_ex = max_ex > last
-    new_ss = max_ss > last
     if new_ex and not new_ss:
         if max_ex == 1:
             cm = "The first of those extras just dropped"
