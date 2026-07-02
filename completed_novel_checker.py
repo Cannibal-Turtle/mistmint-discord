@@ -386,46 +386,13 @@ def _completion_target_entry(feed, novel: dict, feed_type: str):
     """
     Decide which feed entry is allowed to trigger completion.
 
-    Normal novels complete on configured last_chapter.
-    Novels whose chapter_count includes extras / side stories complete only after
-    the final configured bonus entry exists in this feed.
+    The configured last_chapter in novel_mappings.py is the source of truth.
+    If the real end is Extra 3 / Side Story 2, set last_chapter to that value.
+    Completion will then wait until that exact RSS entry exists and has already
+    been posted by the chapter bot.
     """
     novel_id = novel["novel_title"]
     indexed_entries = _matching_title_entries(feed, novel_id)
-
-    total_extras, total_side_stories = _extract_bonus_totals(novel.get("chapter_count", ""))
-    if total_extras or total_side_stories:
-        extra_entries = _find_bonus_entries(indexed_entries, "extra")
-        side_story_entries = _find_bonus_entries(indexed_entries, "side story")
-
-        max_extra = max((num for num, _entry, _idx in extra_entries), default=0)
-        max_side_story = max((num for num, _entry, _idx in side_story_entries), default=0)
-
-        missing = []
-        if total_extras and max_extra < total_extras:
-            missing.append(f"Extra {total_extras}")
-        if total_side_stories and max_side_story < total_side_stories:
-            missing.append(f"Side Story {total_side_stories}")
-
-        if missing:
-            return None, "bonus", (
-                f"⏳ Holding {feed_type} completion for {novel_id}: "
-                f"waiting for final bonus entry/entries in RSS ({', '.join(missing)})."
-            )
-
-        final_bonus_entries = []
-        if total_extras:
-            final_bonus_entries.extend(item for item in extra_entries if item[0] == total_extras)
-        if total_side_stories:
-            final_bonus_entries.extend(item for item in side_story_entries if item[0] == total_side_stories)
-
-        target = _latest_entry(final_bonus_entries)
-        if target is None:
-            return None, "bonus", (
-                f"⏳ Holding {feed_type} completion for {novel_id}: "
-                "chapter_count says there is bonus content, but no final bonus RSS entry was found."
-            )
-        return target, "bonus", ""
 
     last_chap = novel.get("last_chapter") or ""
     for _idx, entry in indexed_entries:

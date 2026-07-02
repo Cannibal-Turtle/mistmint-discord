@@ -29,7 +29,6 @@ import feedparser
 import time
 import subprocess
 from message_renderer import render_message, to_discord_api_payload
-from guid_state import entry_guid_identity, format_seen_guid, seen_guid_identities
 from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
@@ -37,14 +36,12 @@ from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
     env_bool,
-    require_feed_value,
     require_file_value,
     require_server_value,
 )
 
-STATE_PATH     = require_file_value("state_path")
-RSS_STATE_PATH = require_file_value("rss_state_path")
-HOST_TARGET    = require_server_value("host_target")
+STATE_PATH   = require_file_value("state_path")
+HOST_TARGET  = require_server_value("host_target")
 BOT_TOKEN_ENV  = "DISCORD_BOT_TOKEN"
 
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
@@ -248,39 +245,6 @@ def find_released_extras(paid_feed, raw_kw):
     return {number for number, _entry in find_released_extra_entries(paid_feed, raw_kw)}
 
 
-def load_rss_state():
-    return load_state(RSS_STATE_PATH)
-
-
-def paid_seen_guid_identities() -> set[str]:
-    rss_state = load_rss_state()
-    seen_key = require_feed_value("paid", "seen_key")
-    return seen_guid_identities(rss_state.get(seen_key, []))
-
-
-def _release_number_has_been_announced(entries, number: int, label: str, novel_id: str) -> bool:
-    """
-    True only after the actual paid chapter entry for this extra/side story
-    has already been posted by bot_paid_chapters.py and recorded in state_rss.json.
-    """
-    matches = [entry for n, entry in entries if n == number]
-    if not matches:
-        print(f"⏳ Holding extras announcement for {novel_id}: {label} {number} is not in the paid RSS yet.")
-        return False
-
-    seen = paid_seen_guid_identities()
-    seen_key = require_feed_value("paid", "seen_key")
-    for entry in matches:
-        guid_key = entry_guid_identity(entry)
-        if guid_key and guid_key in seen:
-            return True
-
-    pretty = format_seen_guid(matches[0], default_host=HOST_TARGET)
-    print(
-        f"⏳ Holding extras announcement for {novel_id}: {pretty} "
-        f"is not in state_rss.json::{seen_key} yet."
-    )
-    return False
 
 def sanitize_shortcode_from_title(title: str) -> str:
     """Fallback SHORTCODE from title (A–Z/0–9 only)."""
@@ -355,12 +319,11 @@ def process_extras(novel: dict):
         print(f"→ no new extras/side stories for {novel_id} (last={last}, current={current})")
         return
 
+    # At this point the first extra/side-story has appeared in RSS.
+    # Announce it now; bot_paid_chapters.py will hold the actual first
+    # bonus chapter until this state flag exists.
     new_ex = max_ex > last
     new_ss = max_ss > last
-    if new_ex and not _release_number_has_been_announced(extra_entries, max_ex, "Extra", novel_id):
-        return
-    if new_ss and not _release_number_has_been_announced(ss_entries, max_ss, "Side Story", novel_id):
-        return
 
     # totals from mapping's chapter_count string
     m_ex   = re.search(r"(\d+)\s*extras?", novel.get("chapter_count", ""), re.IGNORECASE)

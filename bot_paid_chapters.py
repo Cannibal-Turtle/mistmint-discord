@@ -32,8 +32,9 @@ from config_loader import (
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
-STATE_FILE = require_file_value("rss_state_path")
-FEED_KEY   = require_feed_value("paid", "last_guid_key")
+STATE_FILE       = require_file_value("rss_state_path")
+EXTRA_STATE_FILE = require_file_value("state_path")
+FEED_KEY         = require_feed_value("paid", "last_guid_key")
 RSS_URL    = require_feed_url("paid")
 
 SEEN_KEY       = require_feed_value("paid", "seen_key")
@@ -274,6 +275,58 @@ def should_hold_first_paid_chapter(entry) -> bool:
 
     return is_probable_first_paid_chapter(entry)
 
+
+def load_extra_announcement_state():
+    try:
+        with open(EXTRA_STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def is_bonus_chapter_entry(entry) -> bool:
+    fields = [
+        entry.get("chapter") or "",
+        entry.get("chaptername") or "",
+        entry.get("volume") or "",
+    ]
+    text = _clean_compare(" ".join(fields))
+    if not text:
+        return False
+
+    return bool(
+        re.search(r"\bextras?\b", text)
+        or re.search(r"\bside\s+stor(?:y|ies)\b", text)
+    )
+
+
+def should_hold_bonus_chapter_until_extra_announcement(entry) -> bool:
+    """
+    Hold the first paid extra/side-story chapter until new_extra_checker.py
+    has posted the extras announcement and written meta.extra_announced to state.json.
+
+    This mirrors the launch gate: the announcement goes first, and the chapter
+    is not marked seen while it is being held.
+    """
+    if not is_bonus_chapter_entry(entry):
+        return False
+
+    novel_title = _norm(entry.get("title") or "")
+    if not novel_title:
+        print("⚠️ Bonus paid chapter has no title; cannot check extras announcement state.")
+        return False
+
+    state = load_extra_announcement_state()
+    meta = state.get(novel_title, {})
+    if isinstance(meta, dict) and meta.get("extra_announced"):
+        return False
+
+    print(
+        f"⏳ Holding bonus paid chapter for {novel_title}: "
+        f"extras announcement is not recorded yet in {EXTRA_STATE_FILE}."
+    )
+    return True
+
 # ── Paid coin button helpers ───────────────────────────────────────────────────
 def parse_custom_emoji(e: str):
     if not e: return None
@@ -420,6 +473,9 @@ async def send_new_paid_entries():
                     f"⏳ Holding first paid chapter for {short_code} / {guid}: "
                     "announce_first_chapter_release is false."
                 )
+                continue
+
+            if should_hold_bonus_chapter_until_extra_announcement(entry):
                 continue
 
             if is_arc_start_entry(entry):
