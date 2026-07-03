@@ -31,6 +31,7 @@ import feedparser
 from message_context import build_feed_context
 from message_renderer import render_message, to_discord_api_payload
 from guid_state import entry_guid_identity, format_seen_guid, raw_guid_from_entry, seen_guid_identities
+from git_state_commit import commit_state_update
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
@@ -48,6 +49,7 @@ from config_loader import (
 BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 STATE_FILE = require_file_value("rss_state_path")
+STATE_CHANGED = False
 RSS_URL    = require_feed_url("comments")
 
 FEED_KEY       = require_feed_value("comments", "last_guid_key")
@@ -103,12 +105,19 @@ def load_state():
 
 
 def save_state(state):
+    global STATE_CHANGED
     if isinstance(state.get(SEEN_KEY), list) and len(state[SEEN_KEY]) > SEEN_CAP:
         state[SEEN_KEY] = state[SEEN_KEY][-SEEN_CAP:]
 
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+    STATE_CHANGED = True
 
+
+
+def commit_state_if_changed():
+    if STATE_CHANGED:
+        commit_state_update(STATE_FILE)
 
 def normalize_guid(entry):
     return format_seen_guid(entry, default_host="Mistmint Haven")
@@ -451,4 +460,7 @@ def main():
             # do NOT advance new_last so we retry next run
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        commit_state_if_changed()

@@ -14,6 +14,7 @@ from new_arc_checker import process_arc_by_short_code
 from message_context import build_feed_context
 from message_renderer import render_message, to_discord_py_kwargs
 from guid_state import entry_guid_identity, format_seen_guid, raw_guid_from_entry, seen_guid_identities
+from git_state_commit import commit_state_update
 
 from novel_mappings import get_translator_url, get_coin_emoji
 
@@ -33,6 +34,7 @@ from config_loader import (
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 STATE_FILE       = require_file_value("rss_state_path")
+STATE_CHANGED = False
 EXTRA_STATE_FILE = require_file_value("state_path")
 FEED_KEY         = require_feed_value("paid", "last_guid_key")
 RSS_URL    = require_feed_url("paid")
@@ -177,9 +179,16 @@ def load_state():
 
 
 def save_state(state):
+    global STATE_CHANGED
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+    STATE_CHANGED = True
 
+
+
+def commit_state_if_changed():
+    if STATE_CHANGED:
+        commit_state_update(STATE_FILE)
 
 def _norm(s): return (s or "").strip()
 def _guid(e): return _norm(e.get("guid") or e.get("id")) or None
@@ -577,4 +586,7 @@ async def send_new_paid_entries():
 
 
 if __name__ == "__main__":
-    asyncio.run(send_new_paid_entries())
+    try:
+        asyncio.run(send_new_paid_entries())
+    finally:
+        commit_state_if_changed()
