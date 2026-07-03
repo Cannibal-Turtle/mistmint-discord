@@ -27,6 +27,7 @@ import time
 
 from novel_mappings import HOSTING_SITE_DATA
 from message_renderer import render_message_sequence, to_discord_api_payload
+from git_state_commit import commit_state_update
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 from config_loader import (
@@ -238,20 +239,8 @@ def save_history(history, history_file):
     print(f"✅ Saved {history_file}")
 
 def commit_history_update(history_file):
-    print(f"📌 Commit {history_file}…")
-    os.system("git config --global user.name 'GitHub Actions'")
-    os.system("git config --global user.email 'actions@github.com'")
-    os.system(f"git add {history_file}")
-    changed = os.system("git diff --staged --quiet")
-    if changed != 0:
-        os.system(f"git commit -m 'Auto-update: {history_file}'")
-        print("✅ Committed")
-    else:
-        print("ℹ️ No changes")
-    if os.system("git push origin main") != 0:
-        print("❌ Push failed; retry --force")
-        os.system("git push origin main --force")
-
+    """Commit/push the updated arc history file via the shared Git helper."""
+    return commit_state_update(history_file, f"Auto-update: {history_file}")
 
 # === UTIL ===
 

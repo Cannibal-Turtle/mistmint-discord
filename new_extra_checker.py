@@ -27,8 +27,8 @@ import sys
 import requests
 import feedparser
 import time
-import subprocess
 from message_renderer import render_message, to_discord_api_payload
+from git_state_commit import commit_state_update
 from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
@@ -51,21 +51,6 @@ DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_mi
 
 # ─── DISCORD SEND (per-thread) ─────────────────────────────────────────────────
 
-def commit_state_update(path=STATE_PATH):
-    try:
-        subprocess.run(["git","config","--global","user.name","GitHub Actions"], check=True)
-        subprocess.run(["git","config","--global","user.email","actions@github.com"], check=True)
-        subprocess.run(["git","add", path], check=True)
-        # commit only if there are staged changes
-        staged = subprocess.run(["git","diff","--staged","--quiet"])
-        if staged.returncode != 0:
-            subprocess.run(["git","commit","-m", f"Auto-update: {os.path.basename(path)}"], check=True)
-            subprocess.run(["git","push","origin","main"], check=True)
-        else:
-            print(f"⚠️ No changes detected in {path}, skipping commit.")
-    except Exception as e:
-        print(f"❌ Git commit/push for {path} failed: {e}")
-      
 def unarchive_thread(bot_token: str, thread_id: str, *, unlock: bool = True, auto_archive_minutes: int | None = None) -> bool:
     if auto_archive_minutes is None:
         auto_archive_minutes = DEFAULT_AUTO_ARCHIVE_MINUTES
@@ -243,7 +228,6 @@ def find_released_extra_entries(paid_feed, raw_kw):
 def find_released_extras(paid_feed, raw_kw):
     """Find max index released for a given keyword group (extra / side story)."""
     return {number for number, _entry in find_released_extra_entries(paid_feed, raw_kw)}
-
 
 
 def sanitize_shortcode_from_title(title: str) -> str:

@@ -36,10 +36,10 @@ import html
 import feedparser
 import requests
 from datetime import datetime, timezone
-import subprocess
 import time
 
 from message_renderer import render_message, to_discord_api_payload
+from git_state_commit import commit_state_update
 
 from novel_mappings import (
     HOSTING_SITE_DATA,
@@ -65,22 +65,6 @@ USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
 _THREAD_GUILD_ID_CACHE = {}
 # ───────────────────────────────────────────────────────────────────────────────
-
-def commit_state_update(path=STATE_PATH):
-    """Commit/push state.json so the skip flag survives the next run."""
-    try:
-        subprocess.run(["git","config","--global","user.name","GitHub Actions"], check=True)
-        subprocess.run(["git","config","--global","user.email","actions@github.com"], check=True)
-        subprocess.run(["git","add", path], check=True)
-        # commit only if there are staged changes
-        staged = subprocess.run(["git","diff","--staged","--quiet"])
-        if staged.returncode != 0:
-            subprocess.run(["git","commit","-m", f"Auto-update: {os.path.basename(path)}"], check=True)
-            subprocess.run(["git","push","origin","main"], check=True)
-        else:
-            print(f"⚠️ No changes detected in {path}, skipping commit.")
-    except Exception as e:
-        print(f"❌ Git commit/push for {path} failed: {e}")
 
 def get_entry_translator_url(entry) -> str:
     for key in ("translator_url", "translatorUrl", "translatorurl"):
