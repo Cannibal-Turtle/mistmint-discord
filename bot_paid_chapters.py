@@ -50,6 +50,12 @@ TRANSLATOR_URL = str(server_value("translator_url", "") or "").strip()
 AUTO_ARCHIVE_ALLOWED = set(require_server_value("auto_archive_allowed"))
 USE_UNARCHIVE = env_bool("USE_UNARCHIVE", False)
 DEFAULT_AUTO_ARCHIVE_MINUTES = int(require_server_value("default_auto_archive_minutes"))
+MAX_PER_RUN = int(
+    os.getenv(
+        "MAX_PER_RUN",
+        str(server_value("paid_chapters_max_per_run", 200)),
+    )
+)
 # ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -411,7 +417,6 @@ def is_arc_start_entry(entry):
     return False
     
 async def send_new_paid_entries():
-    MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "200"))
     state   = load_state()
     feed    = await asyncio.to_thread(feedparser.parse, RSS_URL)
     all_ents = list(reversed(feed.entries))              # oldest → newest

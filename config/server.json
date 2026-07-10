@@ -6,6 +6,7 @@
   "ping_user_id": "603578473814032414",
   "auto_archive_allowed": [60, 1440, 4320, 10080],
   "default_auto_archive_minutes": 10080,
+  "paid_chapters_max_per_run": 200,
   "announce_first_arc_release": true,
   "announce_first_chapter_release": true,
   "include_novel_updates_comments": false
