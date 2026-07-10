@@ -411,7 +411,7 @@ def is_arc_start_entry(entry):
     return False
     
 async def send_new_paid_entries():
-    MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "10"))
+    MAX_PER_RUN = int(os.getenv("MAX_PER_RUN", "200"))
     state   = load_state()
     feed    = await asyncio.to_thread(feedparser.parse, RSS_URL)
     all_ents = list(reversed(feed.entries))              # oldest → newest
