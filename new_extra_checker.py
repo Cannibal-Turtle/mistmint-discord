@@ -213,15 +213,42 @@ def find_released_extra_entries(paid_feed, raw_kw):
     else:
         keyword = rf"{re.escape(raw_kw)}s?"
 
-    pattern = re.compile(rf"(?i)\b{keyword}\b.*?(\d+)")
+    # The bonus label must begin the field (or follow a leading "Chapter N"
+    # prefix). This avoids treating ordinary titles such as
+    # "Put Extra Seasoning on It" as bonus content.
+    label_prefix = r"^\s*(?:chapter\s+\d+\s*(?:[-:|–—]\s*)?)?"
+    numbered_pattern = re.compile(
+        rf"(?i){label_prefix}{keyword}\s*(?:[-:|–—]\s*)?(\d+)\b"
+    )
+    keyword_pattern = re.compile(
+        rf"(?i){label_prefix}{keyword}(?=\s*(?:$|[-:|–—]|\d+\b))"
+    )
     found = []
+
     for e in paid_feed.entries:
-        for field in ("chapter", "chaptername", "volume"):
-            val = e.get(field, "") or ""
-            m = pattern.search(val)
+        values = [e.get(field, "") or "" for field in ("chapter", "chaptername", "volume")]
+
+        # Prefer an explicit bonus number, e.g. "Extra 2" or "Side Story 3".
+        explicit_number = None
+        for val in values:
+            m = numbered_pattern.search(val)
             if m:
-                found.append((int(m.group(1)), e))
+                explicit_number = int(m.group(1))
                 break
+
+        if explicit_number is not None:
+            found.append((explicit_number, e))
+            continue
+
+        # Some Mistmint chapters use an ordinary chapter number plus an
+        # unnumbered label, e.g.:
+        #   <chapter>Chapter 131</chapter>
+        #   <chaptername>Extra | The Tale of Tiny Wan Wan</chaptername>
+        # Treat the first such bonus item as bonus #1 so the announcement gate
+        # can open. This checker sends only one extras announcement per novel.
+        if any(keyword_pattern.search(val) for val in values):
+            found.append((1, e))
+
     return found
 
 
