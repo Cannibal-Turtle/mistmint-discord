@@ -9,7 +9,7 @@ content = '''
 *The last chapter, [{chapter_text}]({chapter_link}), has now been released. <a:turtle_hyper:1365223449827737630>
 After {duration} of updates, {novel_title} is now fully translated with {chapter_count}! Thank you for coming on this journey and for your continued support <:turtle_plead:1365223487274352670> You can now visit {host} to binge all advance releases~*<a:Heart:1365575427724283944><a:Paws:1365676154865979453>
 <:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936>
--# Check out other translated projects at [{translator}'s library]({author_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
+-# Check out other translated projects at [{translator}'s library]({translator_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
 '''
 
 [paid_with_duration.allowed_mentions]
@@ -27,7 +27,7 @@ content = '''
 *The last chapter, [{chapter_text}]({chapter_link}), has now been released. <a:turtle_hyper:1365223449827737630>
 {novel_title} is now fully translated with {chapter_count}! Thank you for coming on this journey and for your continued support <:turtle_plead:1365223487274352670> You can now visit {host} to binge all advance releases~*<a:Heart:1365575427724283944><a:Paws:1365676154865979453>
 <:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936>
--# Check out other translated projects at [{translator}'s library]({author_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
+-# Check out other translated projects at [{translator}'s library]({translator_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
 '''
 
 [paid_no_duration.allowed_mentions]
@@ -46,7 +46,7 @@ content = '''
 Thank you all for your amazing support <:green_turtle_heart:1365264636064305203>
 Head over to {host} to dive straight in~*<a:Heart:1365575427724283944><a:Paws:1365676154865979453>
 <:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936>
--# Check out other translated projects at [{translator}'s library]({author_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
+-# Check out other translated projects at [{translator}'s library]({translator_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
 '''
 
 [free.allowed_mentions]
@@ -64,7 +64,7 @@ content = '''
 *The last chapter, [{chapter_text}]({chapter_link}), has now been released. <a:turtle_hyper:1365223449827737630>
 After {duration} of updates, {novel_title} is now fully translated with {chapter_count}! Thank you for coming on this journey and for your continued support <:luv_turtle:365263712549736448> You can now visit {host} to binge on all the releases~*<a:Heart:1365575427724283944><a:Paws:1365676154865979453>
 <:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936>
--# Check out other translated projects at [{translator}'s library]({author_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
+-# Check out other translated projects at [{translator}'s library]({translator_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
 '''
 
 [only_free_with_duration.allowed_mentions]
@@ -82,7 +82,7 @@ content = '''
 *The last chapter, [{chapter_text}]({chapter_link}), has now been released. <a:turtle_hyper:1365223449827737630>
 {novel_title} is now fully translated with {chapter_count}! Thank you for coming on this journey and for your continued support <:luv_turtle:365263712549736448> You can now visit {host} to binge on all the releases~*<a:Heart:1365575427724283944><a:Paws:1365676154865979453>
 <:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936><:FF_Divider_Pink:1365575626194681936>
--# Check out other translated projects at [{translator}'s library]({author_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
+-# Check out other translated projects at [{translator}'s library]({translator_url}) and follow your favourite series’ Discord threads for instant updates <a:moonoutline:1365569437792731198>
 '''
 
 [only_free_no_duration.allowed_mentions]
