@@ -273,6 +273,17 @@ def extract_arc_title(chaptername):
     clean = re.sub(r"(?:\s+001|\(1\)|\.\s*1)$", "", clean).strip()
     return clean
 
+BONUS_LABEL_RE = re.compile(
+    r"^(?:extras?|side[\s_-]*stor(?:y|ies)|bonus(?:\s+chapters?)?|epilogues?|afterword)\b",
+    re.IGNORECASE,
+)
+
+def is_bonus_label(raw: str) -> bool:
+    """Return True for Extras / Side Story / other bonus-section labels."""
+    clean = clean_feed_title(raw or "").strip()
+    clean = re.sub(r"^[\[\(【「『<]+|[\]\)】」』>]+$", "", clean).strip()
+    return bool(BONUS_LABEL_RE.match(clean))
+
 def strip_any_number_prefix(s: str) -> str:
     return re.sub(r"^.*?\d+[^\w\s]*\s*", "", s or "")
 
@@ -405,6 +416,21 @@ def process_arc(novel, thread_id: str, announce: bool = True):
             raw_vol    = (e.get("volume") or "").replace("\u00A0", " ").strip()
             raw_extend = (e.get("chaptername") or "").replace("\u00A0", " ").strip()
             raw_chap   = (e.get("chapter") or "").replace("\u00A0", " ").strip()
+
+            # Extras/side stories are handled by new_extra_checker.py, not here.
+            # A bonus title ending in "(1)" otherwise looks like an arc start.
+            if (
+                is_bonus_label(raw_vol)
+                or is_bonus_label(raw_extend)
+                or is_bonus_label(raw_chap)
+            ):
+                print(
+                    "⏭️ Skipping bonus entry in arc checker: "
+                    f"volume={raw_vol!r}, "
+                    f"chapter={raw_chap!r}, "
+                    f"chaptername={raw_extend!r}"
+                )
+                continue
             if not looks_like_arc_start(raw_vol, raw_chap, raw_extend):
                 continue
             if raw_vol:
