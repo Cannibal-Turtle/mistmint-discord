@@ -3,140 +3,26 @@ name: Delete Today's Discord Messages (MYT)
 on:
   workflow_dispatch:
     inputs:
-      channel_id:
-        description: "Channel/Thread ID (leave blank to use TDLBKGC_THREAD_ID secret)"
+      channel_ids:
+        description: "Channel/Thread IDs; separate multiple IDs with commas, spaces, or new lines. Leave blank to use TDLBKGC_THREAD_ID."
         required: false
         default: ""
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   delete_today:
     runs-on: ubuntu-latest
-    env:
-      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-      INPUT_CHANNEL_ID: ${{ inputs.channel_id }}
-      SECRET_THREAD_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
 
     steps:
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Resolve CHANNEL_ID
-        id: resolve
-        run: |
-          set -euo pipefail
-
-          CHANNEL_ID="${INPUT_CHANNEL_ID}"
-          if [ -z "$CHANNEL_ID" ]; then
-            CHANNEL_ID="${SECRET_THREAD_ID}"
-          fi
-
-          if ! printf '%s\n' "$CHANNEL_ID" | grep -Eq '^[0-9]{15,}$'; then
-            echo "Bad CHANNEL_ID: '$CHANNEL_ID'"
-            exit 1
-          fi
-
-          echo "channel_id=$CHANNEL_ID" >> "$GITHUB_OUTPUT"
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
       - name: Delete today's messages (MYT)
         env:
-          CHANNEL_ID: ${{ steps.resolve.outputs.channel_id }}
-        run: |
-          set -euo pipefail
-
-          AUTH="Authorization: Bot ${DISCORD_BOT_TOKEN}"
-
-          echo "Using channel/thread: $CHANNEL_ID"
-
-          # 🇲🇾 Malaysia time (UTC+8)
-          TODAY_START=$(TZ=Asia/Kuala_Lumpur date +"%Y-%m-%d 00:00:00")
-          CUTOFF_MS=$(TZ=Asia/Kuala_Lumpur date -d "$TODAY_START" +%s%3N)
-          DISCORD_EPOCH=1420070400000
-
-          # Convert to snowflake
-          CUTOFF_SNOWFLAKE=$(( (CUTOFF_MS - DISCORD_EPOCH) << 22 ))
-
-          echo "Snowflake cutoff: $CUTOFF_SNOWFLAKE"
-
-          MESSAGE_IDS=()
-          LAST_ID=""
-
-          while :; do
-            if [ -z "$LAST_ID" ]; then
-              URL="https://discord.com/api/v10/channels/${CHANNEL_ID}/messages?limit=100"
-            else
-              URL="https://discord.com/api/v10/channels/${CHANNEL_ID}/messages?limit=100&before=${LAST_ID}"
-            fi
-
-            RESP=$(curl -sS -H "$AUTH" "$URL")
-            COUNT=$(echo "$RESP" | jq length)
-
-            if [ "$COUNT" -eq 0 ]; then
-              break
-            fi
-
-            STOP=false
-
-            for row in $(echo "$RESP" | jq -r '.[] | @base64'); do
-              _jq() {
-                echo "$row" | base64 --decode | jq -r "$1"
-              }
-
-              ID=$(_jq '.id')
-              TIMESTAMP=$(_jq '.timestamp')
-              
-              # Convert Discord timestamp to epoch ms
-              MSG_MS=$(date -d "$TIMESTAMP" +%s%3N)
-              
-              if [ "$MSG_MS" -lt "$CUTOFF_MS" ]; then
-                STOP=true
-                break
-              fi
-
-              MESSAGE_IDS+=("$ID")
-              LAST_ID="$ID"
-            done
-
-            if [ "$STOP" = true ]; then
-              break
-            fi
-          done
-
-          echo "Found ${#MESSAGE_IDS[@]} messages from today"
-
-          # Bulk delete (max 100 per request)
-          CHUNK=()
-          COUNT=0
-
-          for ID in "${MESSAGE_IDS[@]}"; do
-            CHUNK+=("\"$ID\"")
-            COUNT=$((COUNT+1))
-
-            if [ "$COUNT" -eq 100 ]; then
-              BODY="{\"messages\": [$(IFS=,; echo "${CHUNK[*]}")]}"
-              curl -sS -X POST \
-                -H "$AUTH" \
-                -H "Content-Type: application/json" \
-                -d "$BODY" \
-                "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/bulk-delete"
-
-              echo "Deleted batch of 100"
-
-              CHUNK=()
-              COUNT=0
-              sleep 1
-            fi
-          done
-
-          # Remaining messages
-          if [ "$COUNT" -gt 0 ]; then
-            BODY="{\"messages\": [$(IFS=,; echo "${CHUNK[*]}")]}"
-            curl -sS -X POST \
-              -H "$AUTH" \
-              -H "Content-Type: application/json" \
-              -d "$BODY" \
-              "https://discord.com/api/v10/channels/${CHANNEL_ID}/messages/bulk-delete"
-
-            echo "Deleted final batch ($COUNT)"
-          fi
-
-          echo "✅ Done deleting today's messages (MYT)"
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CHANNEL_IDS: ${{ inputs.channel_ids }}
+          FALLBACK_CHANNEL_ID: ${{ secrets.TDLBKGC_THREAD_ID }}
+        run: python tools/delete_discord_today.py
