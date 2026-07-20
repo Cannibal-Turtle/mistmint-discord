@@ -75,7 +75,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -115,7 +115,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |

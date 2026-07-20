@@ -25,6 +25,7 @@ from dateutil.relativedelta import relativedelta
 from message_renderer import render_message, to_discord_api_payload
 from git_state_commit import commit_state_update
 from guid_state import entry_guid_identity, format_seen_guid, seen_guid_identities
+from announcement_banner import build_announcement_banner
 
 try:
     from novel_mappings import HOSTING_SITE_DATA
@@ -87,21 +88,44 @@ def save_state(state, path=STATE_PATH):
 
 
 # ─── DISCORD SENDER ────────────────────────────────────────────────────────────
-def send_bot_message(bot_token: str, channel_or_thread_id: str, message_payload: dict):
+def send_bot_message(
+    bot_token: str,
+    channel_or_thread_id: str,
+    message_payload: dict,
+    attachment: tuple[str, bytes, str] | None = None,
+):
     """
     POST rendered TOML payload via bot token to the given channel/thread ID.
     Threads are also channels in Discord API, so same endpoint works.
     """
     url = f"https://discord.com/api/v10/channels/{channel_or_thread_id}/messages"
-    headers = {
-        "Authorization": f"Bot {bot_token}",
-        "Content-Type":  "application/json"
-    }
-
     payload = to_discord_api_payload(message_payload)
 
+    if attachment:
+        filename, _, _ = attachment
+        payload = dict(payload)
+        payload["attachments"] = [{"id": 0, "filename": filename}]
+
     def _send():
-        return requests.post(url, headers=headers, json=payload, timeout=20)
+        if attachment:
+            filename, file_bytes, content_type = attachment
+            return requests.post(
+                url,
+                headers={"Authorization": f"Bot {bot_token}"},
+                data={"payload_json": json.dumps(payload, ensure_ascii=False)},
+                files={"files[0]": (filename, file_bytes, content_type)},
+                timeout=30,
+            )
+
+        return requests.post(
+            url,
+            headers={
+                "Authorization": f"Bot {bot_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=20,
+        )
 
     # Preflight: join thread is always safe; unarchive only when allowed
     ensure_bot_in_thread(bot_token, channel_or_thread_id)
@@ -197,9 +221,19 @@ def ensure_bot_in_thread(bot_token: str, thread_id: str) -> bool:
     except requests.RequestException:
         return False
 
-def safe_send_bot(bot_token: str, channel_or_thread_id: str, message_payload: dict) -> bool:
+def safe_send_bot(
+    bot_token: str,
+    channel_or_thread_id: str,
+    message_payload: dict,
+    attachment: tuple[str, bytes, str] | None = None,
+) -> bool:
     try:
-        send_bot_message(bot_token, channel_or_thread_id, message_payload)
+        send_bot_message(
+            bot_token,
+            channel_or_thread_id,
+            message_payload,
+            attachment=attachment,
+        )
         return True
 
     except requests.HTTPError as e:
@@ -286,6 +320,27 @@ def get_entry_translator_url(entry) -> str:
         if value:
             return str(value).strip()
     return ""
+
+
+def build_completion_attachment(novel: dict):
+    featured_image = (novel.get("featured_image") or "").strip()
+    if not featured_image:
+        print(f"⚠️ No featured image for {novel.get('novel_title', 'novel')}; sending text only.")
+        return None
+
+    try:
+        return build_announcement_banner(
+            featured_image,
+            output_size=(1600, 600),
+            crop_position="auto",
+        )
+    except Exception as exc:
+        print(
+            f"⚠️ Could not prepare completion banner for {novel.get('novel_title', 'novel')}: {exc}. "
+            "Sending text only.",
+            file=sys.stderr,
+        )
+        return None
 
 
 def _entry_chapter_text(entry) -> str:
@@ -477,6 +532,7 @@ def load_novels() -> list[dict]:
                 "novel_title":      title,
                 "host":             host,
                 "novel_link":       details.get("novel_url", ""),
+                "featured_image":   details.get("featured_image", ""),
                 "chapter_count":    details.get("chapter_count", ""),
                 "last_chapter":     last,
                 "start_date":       details.get("start_date", ""),
@@ -556,6 +612,7 @@ def main():
         chap_display = _entry_display_text(entry, prefer_full=prefer_full_display)
         chapter_link = entry.get("link", "")
         novel_for_message = dict(novel, feed_translator_url=get_entry_translator_url(entry))
+        completion_attachment = build_completion_attachment(novel)
 
         # compute a chapter timestamp for duration
         if entry.get("published_parsed"):
@@ -575,7 +632,12 @@ def main():
             msg = build_only_free_completion(novel_for_message, chap_display, chapter_link, duration)
             print(f"→ Built message of {len(msg.get('content', ''))} characters")
 
-            if safe_send_bot(bot_token, thread_id, msg):
+            if safe_send_bot(
+                bot_token,
+                thread_id,
+                msg,
+                attachment=completion_attachment,
+            ):
                 print(f"✔️ Sent only-free completion announcement for {novel_id} → thread {thread_id}")
                 state.setdefault(novel_id, {})["only_free_completion"] = {
                     "chapter": chap_display,
@@ -596,7 +658,12 @@ def main():
             msg = build_paid_completion(novel_for_message, chap_display, chapter_link, duration)
             print(f"→ Built message of {len(msg.get('content', ''))} characters")
 
-            if safe_send_bot(bot_token, thread_id, msg):
+            if safe_send_bot(
+                bot_token,
+                thread_id,
+                msg,
+                attachment=completion_attachment,
+            ):
                 print(f"✔️ Sent paid-completion announcement for {novel_id} → thread {thread_id}")
                 state.setdefault(novel_id, {})["paid_completion"] = {
                     "chapter": chap_display,
@@ -616,7 +683,12 @@ def main():
             msg = build_free_completion(novel_for_message, chap_display, chapter_link)
             print(f"→ Built message of {len(msg.get('content', ''))} characters")
 
-            if safe_send_bot(bot_token, thread_id, msg):
+            if safe_send_bot(
+                bot_token,
+                thread_id,
+                msg,
+                attachment=completion_attachment,
+            ):
                 print(f"✔️ Sent free-completion announcement for {novel_id} → thread {thread_id}")
                 state.setdefault(novel_id, {})["free_completion"] = {
                     "chapter": chap_display,
