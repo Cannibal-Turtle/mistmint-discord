@@ -75,7 +75,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.x'
+
+      - name: Cache announcement subject model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/cannibal-turtle/announcement-banner
+          key: announcement-yoloe-11s-seg-pf-v1
 
       - name: Install dependencies
         run: |
@@ -115,7 +121,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.x'
+
+      - name: Cache announcement subject model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/cannibal-turtle/announcement-banner
+          key: announcement-yoloe-11s-seg-pf-v1
 
       - name: Install dependencies
         run: |
