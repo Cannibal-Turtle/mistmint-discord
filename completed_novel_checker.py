@@ -45,6 +45,7 @@ from config_loader import (
     THREAD_ID_MAP,
     THREAD_MAP_FILE,
     env_bool,
+    load_toml,
     require_feed_value,
     require_file_value,
     require_server_value,
