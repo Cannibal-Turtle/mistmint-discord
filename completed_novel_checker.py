@@ -680,8 +680,14 @@ def main():
             # Skip if this novel lacks the requested feed type
             continue
 
-        # Generic skip check before parsing
-        completion_key = "paid_completion" if feed_type == "paid" else "free_completion"
+        # Skip completed novels before fetching/parsing their RSS feed.
+        if feed_type == "paid":
+            completion_key = "paid_completion"
+        elif novel.get("paid_feed"):
+            completion_key = "free_completion"
+        else:
+            completion_key = "only_free_completion"
+
         if state.get(novel_id, {}).get(completion_key):
             print(f"→ skipping {novel_id} ({completion_key}) — already notified")
             continue
